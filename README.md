@@ -13,7 +13,7 @@ Send `/rules` to the bot to get the full rules in private: if you are in a round
 Named after Kaspar Hauser. Roles are drawn at random:
 
 | Role | Who | Goal |
-|---|---|---|
+|:---:|:---:|---|
 | 🧠 **Patient K** | 1 player | Secretly picks the identity and answers the questions in public (Yes / No / Don't know). Wins together with the first researcher who guesses, or with all the researchers if Dr. A is unmasked. |
 | 🔬 **Researchers** | everyone else | Find K's identity. The first to guess wins with K; the other researchers lose. |
 | 🧑‍🔬 **Dr. A** | 1 player, only with 5+ players | Knows the identity and must stay undercover: pretends to investigate and misleads the others (his attempts can never win). Wins if nobody guesses and he is not unmasked. |
@@ -52,7 +52,8 @@ Two teams, **Artichoke** 🟢 and **Bluebird** 🔵, race against each other for
 | `/stats` | Group statistics: top winners, most identities guessed, best player per mode, least caught Dr. A, fastest solve, spy wins |
 | `/mystats` | Your statistics: wins per mode and per role, most played role, identities guessed, fastest solve, times caught as Dr. A (this group, or all groups if used in private) |
 | `/stop` | Cancel the round (its creator or a group admin) |
-| `/setlan en\|ita` | Set the group language (group admins) |
+| `/setlan en` | Set the group language to english (group admins) |
+| `/setlan ita` | Set the group language to italian (group admins) |
 
 Sign-ups last 5 minutes, and the minimum number of players is 2 for K.H. Enigma and 4 for PSY-OPS.
 
@@ -75,7 +76,7 @@ export BOT_TOKEN=your_token     # Windows: set BOT_TOKEN=your_token
 python artichoke.py
 ```
 
-In PyCharm, set `BOT_TOKEN` in the *Environment variables* of the Run Configuration, with `artichoke.py` as the script.
+For local edit/test via PyCharm, set `BOT_TOKEN` in the *Environment variables* of the Run Configuration, with `artichoke.py` as the script.
 
 > ⚠️ Never commit the token. If it leaks, revoke it from BotFather (`/mybots` → your bot → *API Token* → *Revoke*).
 
