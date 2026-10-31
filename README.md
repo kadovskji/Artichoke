@@ -13,7 +13,7 @@ Send `/rules` to the bot to get the full rules in private: if you are in a round
 Named after Kaspar Hauser. Roles are drawn at random:
 
 | Role | Who | Goal |
-|:---:|:---:|---|
+|---|---|---|
 | 🧠 **Patient K** | 1 player | Secretly picks the identity and answers the questions in public (Yes / No / Don't know). Wins together with the first researcher who guesses, or with all the researchers if Dr. A is unmasked. |
 | 🔬 **Researchers** | everyone else | Find K's identity. The first to guess wins with K; the other researchers lose. |
 | 🧑‍🔬 **Dr. A** | 1 player, only with 5+ players | Knows the identity and must stay undercover: pretends to investigate and misleads the others (his attempts can never win). Wins if nobody guesses and he is not unmasked. |
@@ -52,8 +52,7 @@ Two teams, **Artichoke** 🟢 and **Bluebird** 🔵, race against each other for
 | `/stats` | Group statistics: top winners, most identities guessed, best player per mode, least caught Dr. A, fastest solve, spy wins |
 | `/mystats` | Your statistics: wins per mode and per role, most played role, identities guessed, fastest solve, times caught as Dr. A (this group, or all groups if used in private) |
 | `/stop` | Cancel the round (its creator or a group admin) |
-| `/setlan en` | Set the group language to English (group admins) |
-| `/setlan ita` | Set the group language to Italian (group admins) |
+| `/setlan en\|ita` | Set the group language (group admins) |
 
 Sign-ups last 5 minutes, and the minimum number of players is 2 for K.H. Enigma and 4 for PSY-OPS.
 
@@ -76,7 +75,7 @@ export BOT_TOKEN=your_token     # Windows: set BOT_TOKEN=your_token
 python artichoke.py
 ```
 
-For local edit/test via PyCharm, set `BOT_TOKEN` in the *Environment variables* of the Run Configuration, with `artichoke.py` as the script.
+In PyCharm, set `BOT_TOKEN` in the *Environment variables* of the Run Configuration, with `artichoke.py` as the script.
 
 > ⚠️ Never commit the token. If it leaks, revoke it from BotFather (`/mybots` → your bot → *API Token* → *Revoke*).
 
@@ -92,6 +91,7 @@ Then:
 |---|---|---|
 | `BOT_TOKEN` | required | Telegram bot token |
 | `DB_FILE` | `artichoke.db` | SQLite database path |
+| `CONTACT_URL` | this repository | Contact URL put in the User-Agent of Wikipedia/Wikidata requests (Wikimedia asks for it): set it to your own repository or website |
 | `REQUIRE_TAG` | empty | Comma-separated commands handled in groups only as `/command@BotName`, useful if another bot uses the same command (e.g. `summary,stats`) |
 
 ### Always-on hosting
@@ -135,7 +135,7 @@ Run only one instance per token, otherwise Telegram reports a `Conflict` error.
 ## Notes
 
 - Rounds in progress live in memory: a restart cancels them (statistics are kept in the database).
-- If Wikipedia or Wikidata can't be reached, an identity is accepted without validation so the game isn't blocked.
+- If Wikipedia or Wikidata can't be reached, an identity is accepted without validation so the game isn't blocked: the patient is warned in private and the reason is written in the log. `python check_identity.py "Roma"` shows what the bot sees when validating a name.
 - The accepted Wikidata classes can be widened in `wiki.py` (`CHARACTER_CLASSES`, `CHARACTER_LABELS`).
 
 ## License

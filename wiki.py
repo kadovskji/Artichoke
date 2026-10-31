@@ -1,5 +1,6 @@
 """Wikipedia / Wikidata helpers: identity validation and guess matching."""
 import logging
+import os
 import re
 
 import httpx
@@ -22,7 +23,12 @@ CHARACTER_LABELS = (           # classes recognized by their English label
     "human who may be fictional",
 )
 
-_HEADERS = {"User-Agent": "ArtichokeBot/1.0 (Telegram party game bot)"}
+# Wikimedia asks API clients for a descriptive User-Agent with contact information;
+# generic ones may be blocked. Set CONTACT_URL to your own repository or website.
+CONTACT_URL = os.environ.get("CONTACT_URL", "https://github.com/kadovskji/Artichoke")
+HEADERS = {"User-Agent": f"ArtichokeBot/1.0 ({CONTACT_URL}; Telegram party game bot)"}
+SPARQL_URL = "https://query.wikidata.org/sparql"
+SPARQL_HEADERS = {**HEADERS, "Accept": "application/sparql-results+json"}
 
 
 async def verify_wikipedia(name: str, langs: tuple[str, ...]) -> tuple[str, str | None] | None:
@@ -36,7 +42,7 @@ async def verify_wikipedia(name: str, langs: tuple[str, ...]) -> tuple[str, str 
         return None
     variants = list(dict.fromkeys([name, name.title()]))
     try:
-        async with httpx.AsyncClient(timeout=8, headers=_HEADERS) as client:
+        async with httpx.AsyncClient(timeout=8, headers=HEADERS) as client:
             for lang in langs:
                 r = await client.get(
                     f"https://{lang}.wikipedia.org/w/api.php",
@@ -50,35 +56,41 @@ async def verify_wikipedia(name: str, langs: tuple[str, ...]) -> tuple[str, str 
                     if (not page.get("missing") and not page.get("invalid")
                             and "disambiguation" not in props):
                         return page["title"], props.get("wikibase_item")
-    except (httpx.HTTPError, KeyError, ValueError):
-        logging.warning("Wikipedia unreachable, accepting %r without verification", name)
+    except (httpx.HTTPError, KeyError, ValueError) as exc:
+        logging.warning("Wikipedia check failed for %r (%s): accepting without verification",
+                        name, exc)
         return name, None
     return None
 
 
-async def is_character(qid: str | None) -> bool:
-    """True if the Wikidata item is a person or a character.
-
-    If it can't be verified (no id, Wikidata unreachable) it is accepted,
-    so the game isn't blocked.
-    """
-    if not qid or not re.fullmatch(r"Q\d+", qid):
-        return True
+def character_query(qid: str) -> str:
+    """SPARQL ASK query: is the Wikidata item a person or a character?"""
     classes = ", ".join(f"wd:{c}" for c in CHARACTER_CLASSES)
     labels = ", ".join(f'"{x}"' for x in CHARACTER_LABELS)
-    query = (
+    return (
         "ASK { wd:" + qid + " wdt:P31/wdt:P279* ?c . ?c rdfs:label ?l . "
         'FILTER(lang(?l) = "en" && (?c IN (' + classes + ") || "
         "LCASE(STR(?l)) IN (" + labels + "))) }")
+
+
+async def is_character(qid: str | None) -> bool | None:
+    """True / False if the Wikidata item is / isn't a person or a character.
+
+    Returns None when it can't be verified (no id, Wikidata unreachable): callers
+    accept the identity in that case, so the game isn't blocked.
+    """
+    if not qid or not re.fullmatch(r"Q\d+", qid):
+        return None
     try:
-        async with httpx.AsyncClient(timeout=10, headers=_HEADERS) as client:
-            r = await client.get("https://query.wikidata.org/sparql",
-                                 params={"query": query, "format": "json"})
+        async with httpx.AsyncClient(timeout=10, headers=SPARQL_HEADERS) as client:
+            r = await client.get(SPARQL_URL, params={"query": character_query(qid),
+                                                     "format": "json"})
             r.raise_for_status()
             return bool(r.json()["boolean"])
-    except (httpx.HTTPError, KeyError, ValueError):
-        logging.warning("Wikidata unreachable, accepting %s without verification", qid)
-        return True
+    except (httpx.HTTPError, KeyError, ValueError) as exc:
+        logging.warning("Wikidata check failed for %s (%s): accepting without verification",
+                        qid, exc)
+        return None
 
 
 async def match_identity(identities: dict[str, Identity], text: str,

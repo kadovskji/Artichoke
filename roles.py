@@ -146,11 +146,11 @@ async def on_identity(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(T(g.lang, "identity_not_found"))
         return
     title, qid = found
-    if not await wiki.is_character(qid):
-        if g.phase == Phase.CHOOSING and uid in g.awaiting:
-            await update.message.reply_text(T(g.lang, "identity_not_character", title=title))
-        return
+    verdict = await wiki.is_character(qid)      # True / False / None (could not be verified)
     if g.phase != Phase.CHOOSING or uid not in g.awaiting:
+        return
+    if verdict is False:
+        await update.message.reply_text(T(g.lang, "identity_not_character", title=title))
         return
 
     ident = make_identity(typed, title)
@@ -159,10 +159,11 @@ async def on_identity(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     g.identities[g.patient_key(uid)] = ident
     g.awaiting.discard(uid)
+    note = "\n" + T(g.lang, "identity_unverified") if verdict is None else ""
     if g.awaiting:
-        await update.message.reply_text(T(g.lang, "identity_waiting", title=title))
+        await update.message.reply_text(T(g.lang, "identity_waiting", title=title) + note)
         return
-    await update.message.reply_text(T(g.lang, "identity_saved", title=title))
+    await update.message.reply_text(T(g.lang, "identity_saved", title=title) + note)
     await begin_play(ctx, g)
 
 

@@ -297,6 +297,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "en": "Got it: {title}. The game can begin!",
         "it": "Ricevuto: {title}. Il gioco può iniziare!",
     },
+    "identity_unverified": {
+        "en": "⚠️ I couldn't verify this identity on Wikipedia/Wikidata, so I accepted it as is.",
+        "it": "⚠️ Non sono riuscito a verificare questa identità su Wikipedia/Wikidata, quindi l'ho accettata così com'è.",
+    },
     "identity_waiting": {
         "en": "Got it: {title}. Waiting for the other patient…",
         "it": "Ricevuto: {title}. Aspetto l'altro paziente…",
