@@ -33,7 +33,7 @@ Two teams, **Artichoke** 🟢 and **Bluebird** 🔵, race against each other for
 
 - *Don't know* answers don't cost the asker a move.
 - A wrong attempt costs a move. Attempts are matched ignoring case, spaces, accents and punctuation, and through Wikipedia redirects (so "Dante" matches "Dante Alighieri").
-- Identities are validated on Wikipedia and Wikidata: places, events and works are refused.
+- Identities are validated on Wikipedia and Wikidata: places, events, works, groups and real animals are refused, and so are disambiguation pages. Write the name as it appears on Wikipedia: for example “Super Mario” is the video game series, so use “Mario” for the character.
 - If the bot is a group admin with the *Delete messages* permission, it removes messages that reveal an identity.
 
 ## Commands
@@ -131,6 +131,14 @@ Run only one instance per token, otherwise Telegram reports a `Conflict` error.
 | `db.py` | SQLite persistence |
 | `game.py` | Game model, timers and helpers |
 | `i18n.py` | English and Italian strings |
+| `check_identity.py` | Diagnostic tool: shows how a name is validated against Wikipedia and Wikidata |
+
+## Troubleshooting
+
+- **The bot says it couldn't verify an identity, or accepts anything** (even places): Wikipedia or Wikidata can't be reached from the server. Check the log with `sudo journalctl -u artichoke --no-pager | grep "check failed"`. A `403 Forbidden` usually means the User-Agent was refused: set `CONTACT_URL` to your own repository or website. Run `python check_identity.py "Roma"` to see exactly what the bot sees (the expected decision is REFUSE).
+- **`Conflict: terminated by other getUpdates request`**: another copy of the bot is running with the same token. Stop it (PyCharm, another terminal or server).
+- **`KeyError: 'BOT_TOKEN'`**: the token isn't set. Check the `.env` file (server) or the Run Configuration (PyCharm).
+- **`ModuleNotFoundError`**: a `.py` file is missing, or the dependencies aren't installed (`pip install -r requirements.txt`).
 
 ## Notes
 
