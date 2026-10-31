@@ -52,8 +52,8 @@ Two teams, **Artichoke** 🟢 and **Bluebird** 🔵, race against each other for
 | `/stats` | Group statistics: top winners, most identities guessed, best player per mode, least caught Dr. A, fastest solve, spy wins |
 | `/mystats` | Your statistics: wins per mode and per role, most played role, identities guessed, fastest solve, times caught as Dr. A (this group, or all groups if used in private) |
 | `/stop` | Cancel the round (its creator or a group admin) |
-| `/setlan en` | Set the group language to english (group admins) |
-| `/setlan ita` | Set the group language to italian (group admins) |
+| `/setlan en` | Set the group language to English (group admins) |
+| `/setlan ita` | Set the group language to Italian (group admins) |
 
 Sign-ups last 5 minutes, and the minimum number of players is 2 for K.H. Enigma and 4 for PSY-OPS.
 
