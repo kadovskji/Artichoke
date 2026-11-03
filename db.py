@@ -65,6 +65,13 @@ if _legacy:
                 "(SELECT id FROM rounds WHERE mode IN ('enigma', 'psyops'))")
     _db.execute("DELETE FROM rounds WHERE mode IN ('enigma', 'psyops')")
     LOG.info("removed %d rounds played with the old game modes", _legacy)
+
+# Groups seen by older versions (settings or finished rounds) are assumed to still have the bot;
+# if one doesn't, the first announcement marks it inactive.
+_db.execute("INSERT OR IGNORE INTO known_chats (chat_id, title, active) "
+            "SELECT chat_id, NULL, 1 FROM chat_settings WHERE chat_id < 0")
+_db.execute("INSERT OR IGNORE INTO known_chats (chat_id, title, active) "
+            "SELECT DISTINCT chat_id, NULL, 1 FROM rounds WHERE chat_id < 0")
 _db.commit()
 
 
