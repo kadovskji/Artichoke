@@ -19,36 +19,65 @@ Computed automatically from the number of players (group admins can let the roun
 | 9–15 | 5 |
 | 16+ | 3 |
 
+#
 ### 🧪 Artichoke (`artichokemode`, 2+ players)
 
 | Role | Who | Goal |
-|---|---|---|
+|:---:|:---:|:---:|
 | 🧠 **Patient K** | 1 player | Secretly picks the identity and answers the questions in public (Yes / No / Don't know) within 5 minutes each. Wins with the first researcher who guesses. |
 | 🔬 **Researchers** | everyone else | Find K's identity. The first to guess wins with K; the other researchers lose. |
-| 🧑‍🔬 **Dr. A** | 1 player, only with 5+ players | Knows the identity and must stay undercover: pretends to investigate and misleads the others (his attempts can never win). Appears in 70% of the rounds with 5+ players (always, if the group chooses so in `/settings`). |
+| 🧑‍🔬 **Dr. A** | 1 player, only with 5+ players | Knows the identity and must stay undercover: pretends to investigate and misleads the others (his attempts can never win). Present in 70% of the rounds with 5+ players (always, if the group chooses so in `/settings`). |
 
-The round ends when a researcher guesses, when all researchers are out of moves, or after 10 minutes without activity. If nobody guesses:
+**End of the round.** The round ends when a researcher guesses, when all researchers are out of moves, or after 10 minutes without activity.
 
-- **fewer than 5 players**: everybody loses;
-- **5+ players**: everybody votes for 90 seconds (the vote is mandatory, but you can press *Skip* to abstain). Options are every other player, *No Dr. A*, and *Skip*. Secret ballot, no changes, no self-votes; the bot shows the current leader after each vote. The right option (Dr. A, or *No Dr. A* if he isn't in the game) must get strictly more votes than any other option, so ties don't count. If it does, **only the players who voted for it win**. Otherwise Dr. A wins alone, or nobody wins if he wasn't there.
+**If a researcher guesses**, K and that researcher win together; everyone else loses.
 
-### 🕵️ Stargate (`stargatemode`, 3+ players)
+**If nobody guesses:**
+- **2–4 players:** everybody loses.
+- **5+ players:** everybody votes for 90 seconds to find out who Dr. A is. Secret ballot, no changes, no self-votes; the bot shows the current leader after each vote. The options are:
+  - every other player (if you suspect that player);
+  - *No Dr. A* (if you think there is no Dr. A).
+
+**To win the vote:**
+- you must have voted for the right option (Dr. A, or *No Dr. A* if he isn't in the game);
+- the right option must get strictly more votes than any other option, so ties don't count;
+- only the players who voted for it win.
+
+Otherwise Dr. A (if present) wins alone; if he isn't in the game, nobody wins.  
+
+#
+### 🕵️ Stargate (`stargatemode`, 4+ players)
 
 The creator picks 2, 3 or 4 teams. Teams are named at random among *Grill Flame*, *Center Lane*, *Sun Streak* and *Gondola Wish*. Everyone knows which teams are in play and their own team, but not their teammates.
 
-| Teams | Minimum players |
+| Teams | Minimum players (K and Agent Skip included) |
 |---|---|
-| 2 | 3 |
-| 3 | 7 |
-| 4 | 9 |
+| 2 | 4 |
+| 3 | 8 |
+| 4 | 10 |
 
-- One player is **Patient K** for the whole round and answers all teams. All the other researchers (except Skip) are split into teams of the **same size**: at least 2 researchers per team (1 is enough with two teams). If the players can't be split evenly the bot says which numbers of players work and the round is not started.
-- `/ask` and `/try` are public. Each researcher has the same number of moves **for each identity**.
-- When a team guesses an identity it scores a point, K picks a new identity (different from the previous ones) and moves are reset. **The first team to reach 2 points wins** (with K).
-- With an **even** total number of players (if the teams still divide evenly, otherwise the opposite choice is tried) one is **🕶 Agent Skip**, who belongs to no team. Skip can ask questions but starts with 0 attempts, gaining one (up to 5 at a time) every time a researcher guesses wrong. Skip **wins alone** by guessing any identity before the round ends.
-- There is no total time limit. If all researchers run out of moves, or after 10 minutes without activity, the team with strictly most points wins; with a tie nobody wins.
+Besides Whistleblower K and Agent Skip, the researchers are split into teams of the **same size**: at least 2 per team (1 is enough with two teams). If the players can't be split evenly, the bot says which numbers of players work and the round does not start.
 
-### Common rules
+| Role | Who | Goal |
+|:---:|:---:|:---:|
+| 🔬 **Researchers** | in teams | Name the secret identity. The first team to do it wins together with K. |
+| 🧠 **Whistleblower K** | 1 player, **secret** | Hides among the researchers and picks the only identity of the round. K answers every question **in private** (the bot publishes the answer without saying who gave it). To blend in, K also asks questions and makes attempts: K can answer their own questions only with *Don't know*, and K's attempts are always wrong. K wins with the team that names the identity. |
+| 🕶 **Agent Skip** | 1 player, **known to all** | Find out who Whistleblower K is and arrest them. |
+
+- Everybody (K and Skip too) has the same number of moves, questions and attempts together. In this mode *Don't know* **does cost a move**, for everyone, so that the moves left shown in `/summary` can't give K away.
+- `/summary` doesn't show the teams.
+- **Agent Skip's arrests:** Skip starts with 0 and gains one every time a player guesses wrong (K's wrong attempts count too, max 2 at a time). `/arrest` lets Skip pick the player they think is K. While the round is on Skip can use **only 1** arrest; the other one is for the end of the round. Wrong arrests are public (the arrested player is not K).
+- **End of the round:** the round ends when a team names the identity, when all researchers are out of moves, or after 10 minutes without activity. If Skip still has arrests, Skip has 90 seconds to use them. The result is announced after that, unless Skip finds K.
+- **Skip can also** ask questions, and try the identity **in private** with `/try <name>`: if Skip guesses it, `/summary` is disabled for all the other players.
+
+**How to win:**
+
+- The first team that names the identity wins together with K.
+- Agent Skip wins **alone** (everyone else loses) by arresting K, even at the end of the round.
+- If nobody names the identity and Skip doesn't find K, nobody wins.
+
+
+## Common rules
 
 - *Don't know* answers don't cost the asker a move; a wrong attempt costs a move. Attempts are matched ignoring case, spaces, accents and punctuation, and through Wikipedia redirects (so "Dante" matches "Dante Alighieri").
 - Identities are validated on Wikipedia and Wikidata: places, events, works, groups and real animals are refused, and so are disambiguation pages. Write the name as it appears on Wikipedia.
@@ -66,8 +95,9 @@ The creator picks 2, 3 or 4 teams. Teams are named at random among *Grill Flame*
 | `/wait <minutes>` | Extend the sign-up window (max 10 per use, decimals allowed, e.g. `/wait 3.5`) |
 | `/hold <minutes>` | Pause the round (see above) |
 | `/ask <text>` | Ask a yes/no question (one at a time) |
-| `/try <name>` | Try to name the identity |
-| `/summary` | Questions and answers so far; in Stargate, grouped by identity with the score (teams are not shown) |
+| `/try <name>` | Try to name the identity (Agent Skip: in private chat) |
+| `/arrest` | Stargate, Agent Skip only: arrest the player you think is Whistleblower K |
+| `/summary` | Questions and answers so far, and moves left (no teams shown) |
 | `/rules` | Receive the rules in private |
 | `/stats` | Group statistics: top winners, most identities guessed, best player per mode, least caught Dr. A, fastest solve, Skip wins |
 | `/mystats` | Your statistics: wins per mode and per role, most played role, identities guessed, fastest solve, times caught as Dr. A (this group, or all groups if used in private) |

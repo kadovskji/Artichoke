@@ -20,8 +20,7 @@ MODES = (ARTICHOKE, STARGATE)
 
 TEAM_NAMES = ("Grill Flame", "Center Lane", "Sun Streak", "Gondola Wish")
 TEAM_COUNTS = (2, 3, 4)
-POINTS_TO_WIN = 2               # Stargate: identities a team must guess
-SKIP_MAX_TRIES = 5              # Stargate: attempts Agent Skip can hold at once
+SKIP_MAX_TRIES = 2              # Stargate: arrests Agent Skip can hold at once
 
 DR_A_MIN_PLAYERS = 5            # Artichoke: Dr. A and the final vote need this many players
 DR_A_ABSENT_CHANCE = 0.3        # default setting: Dr. A is absent in 30% of the rounds
@@ -35,6 +34,7 @@ CHOICE_SECONDS = 120        # K must pick an identity
 ANSWER_SECONDS = 300        # K must answer a question
 INACTIVITY_SECONDS = 600    # the round ends after this much inactivity
 VOTE_SECONDS = 90           # Dr. A vote
+FINAL_SECONDS = 90          # Stargate: Agent Skip's last chance to arrest K after the round is over
 WAIT_MAX_MINUTES = 10       # max extension per /wait
 HOLD_MAX_MINUTES = 10       # max length of a single /hold
 HOLD_TOTAL_SECONDS = 1800   # max total pause time per round
@@ -51,6 +51,7 @@ class Phase(Enum):
     CHOOSING = auto()   # K chooses an identity
     PLAYING = auto()
     VOTING = auto()     # Artichoke: vote to unmask Dr. A
+    FINAL = auto()      # Stargate: round over, Agent Skip may still arrest K
 
 
 # ---------------------------------------------------------------- rules helpers
@@ -58,7 +59,7 @@ def min_players(mode: str, teams: int = 2) -> int:
     """Minimum number of players for a mode (Stargate depends on the teams)."""
     if mode == ARTICHOKE:
         return 2
-    return {2: 3, 3: 7, 4: 9}.get(teams, 3)
+    return {2: 4, 3: 8, 4: 10}.get(teams, 4)
 
 
 def auto_moves(n_players: int) -> int:
@@ -79,16 +80,13 @@ def auto_moves(n_players: int) -> int:
 def stargate_layout(n_players: int, teams: int) -> tuple[bool, int] | None:
     """How to split `n_players` for a Stargate round: (has_skip, team_size), or None.
 
-    K is always there. Agent Skip plays when the total number of players is even;
-    if the researchers can't be split evenly that way, the opposite choice is tried.
-    Teams need at least 2 researchers each, except with 2 teams (1 is enough).
+    Patient K and Agent Skip are always there; the remaining researchers must split
+    into equal teams of at least 2 (1 is enough with two teams).
     """
     min_size = 1 if teams == 2 else 2
-    preferred = n_players % 2 == 0
-    for skip in (preferred, not preferred):
-        researchers = n_players - 1 - (1 if skip else 0)
-        if researchers >= teams * min_size and researchers % teams == 0:
-            return skip, researchers // teams
+    researchers = n_players - 2
+    if researchers >= teams * min_size and researchers % teams == 0:
+        return True, researchers // teams
     return None
 
 
@@ -145,7 +143,8 @@ class Question:
     id: int
     asker: int
     text: str
-    message_id: int | None = None
+    message_id: int | None = None               # message in the group
+    dm_message_id: int | None = None            # Stargate: the copy sent to K in private
 
 
 @dataclass
@@ -179,9 +178,10 @@ class Game:
     log: list[dict] = field(default_factory=list)
     counter: int = 0
 
-    points: dict[str, int] = field(default_factory=dict)      # Stargate
-    solved: list[tuple[str, str, str]] = field(default_factory=list)  # (title, team, guesser)
-    skip_tries: int = 0                                       # attempts Skip holds right now
+    skip_tries: int = 0                                       # arrests Skip holds right now
+    skip_play_used: int = 0                                   # arrests used while playing (max 1)
+    summary_off: bool = False                                 # Skip guessed the identity: no /summary
+    final: tuple | None = None                                # result waiting for Skip's last chance
     skip_used: int = 0
     guessed: dict[int, int] = field(default_factory=dict)     # identities guessed per player
     solve_moves: dict[int, int] = field(default_factory=dict) # moves used at the best guess
@@ -204,7 +204,8 @@ class Game:
 
     def askers(self) -> list[int]:
         """Everyone who can ask questions (and has a pool of moves)."""
-        return [u for u in self.players if self.roles.get(u) in (RESEARCHER, DR_A, SKIP)]
+        extra = (PATIENT,) if self.mode == STARGATE else ()
+        return [u for u in self.players if self.roles.get(u) in (RESEARCHER, DR_A, SKIP, *extra)]
 
     def team_members(self, team: str) -> list[int]:
         return [u for u in self.players if self.team.get(u) == team]
@@ -267,7 +268,7 @@ def close_game(ctx, g: Game, reason: str = "closed") -> None:
     for (cid, kind, key) in list(timers):
         if cid == g.chat_id:
             cancel_job(ctx, kind, cid, key)
-    for kind in ("config", "lobby", "choice", "inactivity", "answer", "vote", "hold"):
+    for kind in ("config", "lobby", "choice", "inactivity", "answer", "vote", "hold", "final"):
         cancel_job(ctx, kind, g.chat_id)
     for uid in g.players:
         user_game.pop(uid, None)

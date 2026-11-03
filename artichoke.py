@@ -58,6 +58,7 @@ COMMANDS = [
     ("hold", "Pause the round: /hold <minutes>", "Pausa il round: /hold <minuti>"),
     ("ask", "Ask a yes/no question", "Fai una domanda sì/no"),
     ("try", "Try to name the identity", "Prova a indovinare l'identità"),
+    ("arrest", "Stargate: Agent Skip arrests K", "Stargate: l'agente Skip arresta K"),
     ("summary", "Questions and answers so far", "Domande e risposte finora"),
     ("rules", "Get the rules in private", "Ricevi le regole in privato"),
     ("stats", "Group statistics", "Statistiche del gruppo"),
@@ -123,6 +124,7 @@ def main() -> None:
     command("hold", play.hold)
     command("ask", play.ask)
     command("try", play.try_cmd)
+    command("arrest", play.arrest)
     command("summary", play.summary)
     command("settings", settings.settings)
     command("rules", rules.rules)
@@ -135,6 +137,7 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(lobby.cb_moves, pattern=r"^n:"))
     app.add_handler(CallbackQueryHandler(play.cb_answer, pattern=r"^a:"))
     app.add_handler(CallbackQueryHandler(play.cb_vote, pattern=r"^v:"))
+    app.add_handler(CallbackQueryHandler(play.cb_arrest, pattern=r"^k:"))
     app.add_handler(CallbackQueryHandler(settings.cb_settings, pattern=r"^s:"))
     app.add_handler(CallbackQueryHandler(admin.cb_admin, pattern=r"^ad:"))
 

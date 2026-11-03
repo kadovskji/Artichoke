@@ -1,4 +1,4 @@
-"""Playing phase: questions, attempts, answers, Stargate points, Dr. A vote, /hold,
+"""Playing phase: questions, attempts, answers, Agent Skip arrests, Dr. A vote, /hold,
 /summary and round endings."""
 import math
 import re
@@ -11,8 +11,8 @@ from telegram.ext import ContextTypes
 
 import db
 import wiki
-from game import (ANSWER_SECONDS, ARTICHOKE, CHOICE_SECONDS, DR_A, DR_A_MIN_PLAYERS,
-                  HOLD_MAX_MINUTES, HOLD_TOTAL_SECONDS, INACTIVITY_SECONDS, POINTS_TO_WIN,
+from game import (ANSWER_SECONDS, ARTICHOKE, DR_A, DR_A_MIN_PLAYERS, FINAL_SECONDS,
+                  HOLD_MAX_MINUTES, HOLD_TOTAL_SECONDS, INACTIVITY_SECONDS, PATIENT,
                   RESEARCHER, SKIP, SKIP_MAX_TRIES, STARGATE, VOTE_SECONDS, Game, Phase,
                   Question, cancel_job, close_game, dm, fmt_duration, games, is_admin, norm,
                   say, schedule, timers, user_game, wiki_langs)
@@ -31,21 +31,32 @@ def touch_inactivity(ctx, g: Game) -> None:
     schedule(ctx, inactivity_expired, INACTIVITY_SECONDS, "inactivity", g.chat_id)
 
 
-def score_text(g: Game) -> str:
-    return ", ".join(f"{t} {g.points.get(t, 0)}" for t in g.team_names)
-
-
 def identities_text(g: Game) -> str:
     return " / ".join(i.title for i in g.used_identities) or "-"
 
 
 # ---------------------------------------------------------------- /ask
-def _kb_answer(g: Game, q: Question) -> InlineKeyboardMarkup:
+def _kb_answer(g: Game, q: Question, only_unknown: bool = False) -> InlineKeyboardMarkup:
+    unknown = InlineKeyboardButton(T(g.lang, "btn_unknown"), callback_data=f"a:{q.id}:u")
+    if only_unknown:
+        return InlineKeyboardMarkup([[unknown]])
     return InlineKeyboardMarkup([[
         InlineKeyboardButton(T(g.lang, "btn_yes"), callback_data=f"a:{q.id}:y"),
         InlineKeyboardButton(T(g.lang, "btn_no"), callback_data=f"a:{q.id}:n"),
-        InlineKeyboardButton(T(g.lang, "btn_unknown"), callback_data=f"a:{q.id}:u"),
+        unknown,
     ]])
+
+
+def _can_ask(g: Game, role: str | None) -> bool:
+    if g.mode == STARGATE:
+        return role in (RESEARCHER, PATIENT, SKIP)
+    return role in (RESEARCHER, DR_A)
+
+
+def _can_try(g: Game, role: str | None) -> bool:
+    if g.mode == STARGATE:
+        return role in (RESEARCHER, PATIENT)
+    return role in (RESEARCHER, DR_A)
 
 
 async def _gate(update: Update, g: Game | None) -> bool:
@@ -68,7 +79,7 @@ async def ask(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     g = games.get(chat.id)
     if not await _gate(update, g):
         return
-    if g.roles.get(user.id) not in (RESEARCHER, DR_A, SKIP):
+    if not _can_ask(g, g.roles.get(user.id)):
         await update.message.reply_text(T(g.lang, "ask_forbidden"))
         return
     text = " ".join(ctx.args).strip()[:200]
@@ -76,22 +87,40 @@ async def ask(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(T(g.lang, "ask_usage"))
         return
     if g.pending:
-        await update.message.reply_text(T(g.lang, "ask_pending", patient=g.name(g.patient)))
+        await update.message.reply_text(
+            T(g.lang, "ask_pending_s") if g.mode == STARGATE
+            else T(g.lang, "ask_pending", patient=g.name(g.patient)))
         return
     if g.moves_left(user.id) <= 0:
         await update.message.reply_text(T(g.lang, "no_moves"))
         return
 
-    g.moves_used[user.id] = g.moves_used.get(user.id, 0) + 1   # refunded on "don't know"
+    # the move is spent now (Artichoke refunds it on "don't know", Stargate never does)
+    g.moves_used[user.id] = g.moves_used.get(user.id, 0) + 1
     g.counter += 1
     q = Question(g.counter, user.id, text)
     g.pending = q
-    msg = await ctx.bot.send_message(
-        chat.id,
-        T(g.lang, "question_msg", who=g.name(user.id), used=g.moves_used[user.id],
-          limit=g.moves, text=text, patient=g.name(g.patient)),
-        reply_markup=_kb_answer(g, q))
-    q.message_id = msg.message_id
+    if g.mode == ARTICHOKE:
+        msg = await ctx.bot.send_message(
+            chat.id,
+            T(g.lang, "question_msg", who=g.name(user.id), used=g.moves_used[user.id],
+              limit=g.moves, text=text, patient=g.name(g.patient)),
+            reply_markup=_kb_answer(g, q))
+        q.message_id = msg.message_id
+    else:
+        # Stargate: K is secret, so K answers in private and the bot publishes the answer
+        msg = await ctx.bot.send_message(
+            chat.id,
+            T(g.lang, "question_msg_s", who=g.name(user.id), used=g.moves_used[user.id],
+              limit=g.moves, text=text))
+        q.message_id = msg.message_id
+        own = user.id == g.patient
+        copy = await ctx.bot.send_message(
+            g.patient,
+            T(g.lang, "dm_question_own" if own else "dm_question",
+              who=g.name(user.id), text=text),
+            reply_markup=_kb_answer(g, q, only_unknown=own))
+        q.dm_message_id = copy.message_id
     schedule(ctx, answer_expired, ANSWER_SECONDS, "answer", chat.id, data=q.id)
     touch_inactivity(ctx, g)
 
@@ -99,30 +128,43 @@ async def ask(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def cb_answer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     cq = update.callback_query
     _, qid, ans = cq.data.split(":")
-    g = games.get(cq.message.chat_id)
-    lang = _lang(cq.message.chat_id)
+    uid = cq.from_user.id
+    # Artichoke: the buttons are in the group. Stargate: they are in K's private chat.
+    g = games.get(cq.message.chat_id) or games.get(user_game.get(uid))
+    lang = g.lang if g else _lang(cq.message.chat_id)
     pend = g.pending if g else None
     if not g or g.phase != Phase.PLAYING or not pend or pend.id != int(qid):
         await cq.answer(T(lang, "answer_stale"), show_alert=True)
         return
-    if cq.from_user.id != g.patient:
+    if uid != g.patient:
         await cq.answer(T(lang, "answer_not_patient", patient=g.name(g.patient)),
                         show_alert=True)
         return
     if g.paused:
         await cq.answer(T(lang, "game_paused"), show_alert=True)
         return
+    if g.mode == STARGATE and pend.asker == g.patient and ans != "u":
+        await cq.answer(T(lang, "answer_own_only"), show_alert=True)
+        return
 
     cancel_job(ctx, "answer", g.chat_id)
     g.pending = None
-    if ans == "u":
-        g.moves_used[pend.asker] -= 1           # "don't know" does not cost a move
+    if ans == "u" and g.mode == ARTICHOKE:
+        g.moves_used[pend.asker] -= 1           # only in Artichoke "don't know" is free
     g.log.append({"no": g.identity_no, "who": g.name(pend.asker), "kind": "ask",
                   "text": pend.text, "res": ans})
     await cq.answer()
-    await cq.edit_message_text(T(
-        g.lang, "answered_msg", who=g.name(pend.asker), text=pend.text,
-        answer=T(g.lang, f"res_{ans}")))
+    result = T(g.lang, f"res_{ans}")
+    published = T(g.lang, "answered_msg", who=g.name(pend.asker), text=pend.text, answer=result)
+    if g.mode == ARTICHOKE:
+        await cq.edit_message_text(published)
+    else:
+        await cq.edit_message_text(T(g.lang, "dm_question_done", answer=result))
+        try:
+            await ctx.bot.edit_message_text(published, chat_id=g.chat_id,
+                                            message_id=pend.message_id)
+        except TelegramError:
+            pass
     touch_inactivity(ctx, g)
     await check_exhausted(ctx, g)
 
@@ -131,44 +173,44 @@ async def answer_expired(ctx: ContextTypes.DEFAULT_TYPE) -> None:
     g = games.get(ctx.job.chat_id)
     if not g or g.phase != Phase.PLAYING or not g.pending or g.pending.id != ctx.job.data:
         return
-    patient, ids = g.name(g.patient), identities_text(g)
+    ids = identities_text(g)
     await clear_pending(ctx, g)
     close_game(ctx, g, "patient did not answer")
-    await ctx.bot.send_message(g.chat_id, T(g.lang, "answer_timeout", patient=patient, ids=ids))
+    if g.mode == STARGATE:
+        await ctx.bot.send_message(g.chat_id, T(g.lang, "answer_timeout_s", ids=ids))
+    else:
+        await ctx.bot.send_message(g.chat_id, T(g.lang, "answer_timeout",
+                                                patient=g.name(g.patient), ids=ids))
 
 
 # ---------------------------------------------------------------- /try
 async def try_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     chat, user = update.effective_chat, update.effective_user
     if chat.type == "private":
+        await _agent_private_try(update, ctx)
         return
     g = games.get(chat.id)
     if not await _gate(update, g):
         return
     role = g.roles.get(user.id)
-    if role not in (RESEARCHER, DR_A, SKIP):
+    if role == SKIP and g.mode == STARGATE:
+        await dm(ctx, user.id, g, "agent_try_private")
+        return
+    if not _can_try(g, role):
         await update.message.reply_text(T(g.lang, "try_forbidden"))
         return
     text = " ".join(ctx.args).strip()[:100]
     if not text:
         await update.message.reply_text(T(g.lang, "try_usage"))
         return
-
-    if role == SKIP:
-        if g.skip_tries <= 0:
-            await dm(ctx, user.id, g, "skip_no_tries")      # private: don't expose the role
-            return
-        g.skip_tries -= 1
-        g.skip_used += 1
-    else:
-        if g.moves_left(user.id) <= 0:
-            await update.message.reply_text(T(g.lang, "no_moves"))
-            return
-        g.moves_used[user.id] = g.moves_used.get(user.id, 0) + 1
+    if g.moves_left(user.id) <= 0:
+        await update.message.reply_text(T(g.lang, "no_moves"))
+        return
+    g.moves_used[user.id] = g.moves_used.get(user.id, 0) + 1
 
     no = g.identity_no
-    if role == DR_A:
-        correct = False                         # Dr. A can never win by guessing
+    if role in (DR_A, PATIENT):
+        correct = False                         # Dr. A and Patient K can never win by guessing
     else:
         hit = await wiki.match_identity({"main": g.identity}, text, wiki_langs(g.lang))
         correct = hit is not None
@@ -177,22 +219,18 @@ async def try_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     touch_inactivity(ctx, g)
 
     if correct:
-        if role == SKIP:
-            await finish_skip_win(ctx, g, user.id)
-        elif g.mode == ARTICHOKE:
+        if g.mode == ARTICHOKE:
             await finish_solved(ctx, g, user.id)
         else:
-            await point_scored(ctx, g, user.id)
+            await finish_team_win(ctx, g, user.id)
         return
 
     g.log.append({"no": no, "who": g.name(user.id), "kind": "try", "text": text,
                   "res": "wrong"})
-    if role == SKIP:
-        await update.message.reply_text(T(g.lang, "try_wrong_skip", text=text))
-    else:
-        await update.message.reply_text(T(
-            g.lang, "try_wrong", who=g.name(user.id), text=text, left=g.moves_left(user.id)))
-    if g.skip is not None and role == RESEARCHER:
+    await update.message.reply_text(T(
+        g.lang, "try_wrong", who=g.name(user.id), text=text, left=g.moves_left(user.id)))
+    # Every wrong attempt (K's too, so K can't be told apart) gives Agent Skip an arrest
+    if g.skip is not None and role in (RESEARCHER, PATIENT):
         if g.skip_tries < SKIP_MAX_TRIES:
             g.skip_tries += 1
             await dm(ctx, g.skip, g, "skip_gain", n=g.skip_tries)
@@ -201,14 +239,114 @@ async def try_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await check_exhausted(ctx, g)
 
 
+async def _agent_private_try(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Agent Skip tries the identity in private: success disables /summary for the others."""
+    user = update.effective_user
+    g = games.get(user_game.get(user.id))
+    if (not g or g.mode != STARGATE or g.roles.get(user.id) != SKIP
+            or g.phase not in (Phase.PLAYING, Phase.FINAL)):
+        return
+    text = " ".join(ctx.args).strip()[:100]
+    if not text:
+        await update.message.reply_text(T(g.lang, "try_usage"))
+        return
+    if g.summary_off:
+        await update.message.reply_text(T(g.lang, "agent_identity_already"))
+        return
+    hit = await wiki.match_identity({"main": g.identity}, text, wiki_langs(g.lang))
+    if games.get(g.chat_id) is not g:
+        return
+    if hit is None:
+        await update.message.reply_text(T(g.lang, "agent_identity_wrong"))
+        return
+    g.summary_off = True
+    await update.message.reply_text(T(g.lang, "agent_identity_ok"))
+
+
+# ---------------------------------------------------------------- /arrest (Agent Skip)
+def _arrest_problem(g: Game, uid: int) -> str | None:
+    """Why Agent Skip can't arrest right now (an i18n key), or None."""
+    if uid != g.skip:
+        return "arrest_forbidden"
+    if g.skip_tries <= 0:
+        return "arrest_none"
+    if g.phase == Phase.PLAYING and g.skip_play_used >= 1:
+        return "arrest_wait_end"                # the second arrest is for the end
+    return None
+
+
+def _kb_arrest(g: Game) -> InlineKeyboardMarkup:
+    buttons = [InlineKeyboardButton(g.name(u)[:20], callback_data=f"k:{u}")
+               for u in g.players if u != g.skip]
+    return InlineKeyboardMarkup([buttons[i:i + 2] for i in range(0, len(buttons), 2)])
+
+
+async def arrest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    chat, user = update.effective_chat, update.effective_user
+    if chat.type == "private":
+        return
+    g = games.get(chat.id)
+    if not g or g.mode != STARGATE:
+        return
+    if g.paused:
+        await update.message.reply_text(T(g.lang, "game_paused"))
+        return
+    if g.phase not in (Phase.PLAYING, Phase.FINAL):
+        await update.message.reply_text(T(g.lang, "round_not_playing"))
+        return
+    problem = _arrest_problem(g, user.id)
+    if problem:
+        await update.message.reply_text(T(g.lang, problem))
+        return
+    await update.message.reply_text(T(g.lang, "arrest_menu", n=g.skip_tries),
+                                    reply_markup=_kb_arrest(g))
+
+
+async def cb_arrest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    cq = update.callback_query
+    g = games.get(cq.message.chat_id)
+    lang = _lang(cq.message.chat_id)
+    if not g or g.mode != STARGATE or g.phase not in (Phase.PLAYING, Phase.FINAL):
+        await cq.answer(T(lang, "arrest_stale"), show_alert=True)
+        return
+    if g.paused:
+        await cq.answer(T(lang, "game_paused"), show_alert=True)
+        return
+    problem = _arrest_problem(g, cq.from_user.id)
+    if problem:
+        await cq.answer(T(lang, problem), show_alert=True)
+        return
+    target = int(cq.data.split(":")[1])
+    if target not in g.players or target == g.skip:
+        await cq.answer()
+        return
+    await cq.answer(T(lang, "arrest_done"))
+    g.skip_tries -= 1
+    g.skip_used += 1
+    if g.phase == Phase.PLAYING:
+        g.skip_play_used += 1
+    if target == g.patient:
+        try:
+            await cq.edit_message_text(T(g.lang, "arrest_done"))
+        except TelegramError:
+            pass
+        await finish_skip_win(ctx, g)
+        return
+    try:
+        await cq.edit_message_text(
+            T(g.lang, "arrest_wrong", name=g.name(target), n=g.skip_tries))
+    except TelegramError:
+        pass
+    if g.phase == Phase.FINAL and g.skip_tries <= 0:
+        await complete_final(ctx, g)
+
+
 # ---------------------------------------------------------------- round-end checks
 async def check_exhausted(ctx, g: Game) -> None:
     """End the round when nobody can make progress any more."""
     if g.phase != Phase.PLAYING or g.pending or g.paused:
         return
     if any(g.moves_left(u) > 0 for u in g.researchers()):
-        return
-    if g.skip is not None and g.skip_tries > 0:
         return
     await end_without_guess(ctx, g)
 
@@ -220,13 +358,7 @@ async def end_without_guess(ctx, g: Game) -> None:
         else:
             await finish_no_winner(ctx, g)
         return
-    # Stargate: a strict leader wins, otherwise nobody
-    ranked = sorted(g.team_names, key=lambda t: g.points.get(t, 0), reverse=True)
-    best = g.points.get(ranked[0], 0)
-    if best > 0 and sum(1 for t in ranked if g.points.get(t, 0) == best) == 1:
-        await finish_team_win(ctx, g, ranked[0], lead=True)
-    else:
-        await finish_no_winner(ctx, g)
+    await finish_no_winner(ctx, g)
 
 
 async def inactivity_expired(ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -250,7 +382,7 @@ def _label(g: Game, v) -> str:
 
 def _vote_text(g: Game) -> str:
     head = T(g.lang, "vote_start", secs=VOTE_SECONDS)
-    counts = Counter(v for v in g.votes.values() if v != "skip")
+    counts = Counter(g.votes.values())
     if counts:
         top = max(counts.values())
         leaders = ", ".join(_label(g, v) for v, c in counts.items() if c == top)
@@ -265,8 +397,7 @@ def _kb_vote(g: Game) -> InlineKeyboardMarkup:
     buttons = [InlineKeyboardButton(g.name(u)[:20], callback_data=f"v:{u}")
                for u in g.players]
     rows = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
-    rows.append([InlineKeyboardButton(T(g.lang, "vote_option_none"), callback_data="v:none"),
-                 InlineKeyboardButton(T(g.lang, "btn_vote_skip"), callback_data="v:skip")])
+    rows.append([InlineKeyboardButton(T(g.lang, "vote_option_none"), callback_data="v:none")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -291,7 +422,7 @@ async def cb_vote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if voter not in g.players:
         await cq.answer(T(lang, "vote_not_player"), show_alert=True)
         return
-    if raw in ("none", "skip"):
+    if raw == "none":
         target = raw
     else:
         target = int(raw)
@@ -305,7 +436,7 @@ async def cb_vote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await cq.answer(T(lang, "vote_already"), show_alert=True)
         return
     g.votes[voter] = target                     # secret and irrevocable
-    await cq.answer(T(lang, "vote_skipped" if target == "skip" else "vote_recorded"))
+    await cq.answer(T(lang, "vote_recorded"))
     if len(g.votes) == len(g.players):
         await finish_vote(ctx, g)
         return
@@ -324,7 +455,7 @@ async def vote_expired(ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def finish_vote(ctx, g: Game) -> None:
     """Plurality rule: the right option must have strictly more votes than any other."""
     cancel_job(ctx, "vote", g.chat_id)
-    counts = Counter(v for v in g.votes.values() if v != "skip")
+    counts = Counter(g.votes.values())
     tally = (", ".join(f"{_label(g, v)}: {c}" for v, c in counts.most_common())
              or T(g.lang, "none_label"))
     correct = g.dr_a if g.dr_a is not None else "none"
@@ -359,9 +490,8 @@ def reveal(g: Game) -> str:
     out = ""
     if g.dr_a is not None:
         out += T(g.lang, "reveal_dr_a", name=g.name(g.dr_a))
-    if g.skip is not None:
-        out += T(g.lang, "reveal_skip", name=g.name(g.skip))
     if g.mode == STARGATE:
+        out += T(g.lang, "reveal_patient", name=g.name(g.patient))
         for t in g.team_names:
             out += T(g.lang, "reveal_team", team=t,
                      members=", ".join(g.name(u) for u in g.team_members(t)) or "-")
@@ -406,57 +536,59 @@ async def finish_solved(ctx, g: Game, guesser: int) -> None:
     await _finish(ctx, g, "solved", {g.patient, guesser}, text + reveal(g))
 
 
-async def finish_skip_win(ctx, g: Game, skip_uid: int) -> None:
-    g.guessed[skip_uid] = g.guessed.get(skip_uid, 0) + 1
-    text = T(g.lang, "skip_win", skip=g.name(skip_uid), title=g.identity.title,
+async def finish_skip_win(ctx, g: Game) -> None:
+    """Stargate: Agent Skip arrested the right player and wins alone."""
+    g.final = None
+    text = T(g.lang, "skip_win", skip=g.name(g.skip), k=g.name(g.patient),
              ids=identities_text(g))
-    await _finish(ctx, g, "skip_win", {skip_uid}, text + reveal(g))
+    await _finish(ctx, g, "skip_win", {g.skip}, text + reveal(g))
 
 
-async def point_scored(ctx, g: Game, guesser: int) -> None:
-    """Stargate: a team guessed the current identity."""
-    team = g.team[guesser]
-    g.points[team] = g.points.get(team, 0) + 1
-    g.solved.append((g.identity.title, team, guesser))
+async def finish_team_win(ctx, g: Game, guesser: int) -> None:
+    """Stargate: a team named the identity; it wins together with K."""
     _credit(g, guesser)
-    if g.points[team] >= POINTS_TO_WIN:
-        await finish_team_win(ctx, g, team)
-        return
-    await say(ctx, g, "point_scored", guesser=g.name(guesser), title=g.identity.title,
-              team=team, score=score_text(g))
-    await request_identity(ctx, g)
-
-
-async def request_identity(ctx, g: Game) -> None:
-    """Stargate: K must pick a new identity; moves are reset."""
-    await clear_pending(ctx, g)
-    cancel_job(ctx, "inactivity", g.chat_id)
-    for u, n in g.moves_used.items():
-        g.total_moves[u] = g.total_moves.get(u, 0) + n
-    g.moves_used = {u: 0 for u in g.askers()}
-    g.identity = None
-    g.phase = Phase.CHOOSING
-    g.awaiting_identity = True
-    await say(ctx, g, "next_identity_group", k=g.name(g.patient))
-    await dm(ctx, g.patient, g, "dm_next_identity")
-    schedule(ctx, choice_expired, CHOICE_SECONDS, "choice", g.chat_id)
-
-
-async def finish_team_win(ctx, g: Game, team: str, lead: bool = False) -> None:
-    members = g.team_members(team)
-    winners = {g.patient, *members}
+    team = g.team[guesser]
+    winners = {g.patient, *g.team_members(team)}
     names = ", ".join(g.name(u) for u in g.players if u in winners)
-    text = T(g.lang, "team_win_lead" if lead else "team_win", team=team,
-             pts=g.points.get(team, 0), winners=names, ids=identities_text(g))
-    await _finish(ctx, g, "team_win", winners, text + reveal(g), winner_team=team)
+    text = T(g.lang, "team_win", team=team, title=g.identity.title, winners=names)
+    await end_stargate(ctx, g, "team_win", winners, text, team)
 
 
 async def finish_no_winner(ctx, g: Game) -> None:
     if g.mode == ARTICHOKE:
         text = T(g.lang, "no_winner_artichoke", title=g.identity.title)
+        await _finish(ctx, g, "no_winner", set(), text + reveal(g))
     else:
-        text = T(g.lang, "no_winner_stargate", score=score_text(g), ids=identities_text(g))
-    await _finish(ctx, g, "no_winner", set(), text + reveal(g))
+        text = T(g.lang, "no_winner_stargate", ids=identities_text(g))
+        await end_stargate(ctx, g, "no_winner", set(), text, None)
+
+
+async def end_stargate(ctx, g: Game, outcome: str, winners: set[int], text: str,
+                       winner_team: str | None) -> None:
+    """The round is over: if Agent Skip still has arrests there are 90 seconds left."""
+    await clear_pending(ctx, g)
+    if g.skip is None or g.skip_tries <= 0:
+        await _finish(ctx, g, outcome, winners, text + reveal(g), winner_team=winner_team)
+        return
+    g.final = (outcome, winners, text, winner_team)
+    g.phase = Phase.FINAL
+    cancel_job(ctx, "inactivity", g.chat_id)
+    await ctx.bot.send_message(g.chat_id, T(g.lang, "final_window", secs=FINAL_SECONDS),
+                               reply_markup=_kb_arrest(g))
+    schedule(ctx, final_expired, FINAL_SECONDS, "final", g.chat_id)
+
+
+async def complete_final(ctx, g: Game) -> None:
+    """Skip's last chance is over: announce the result that was waiting."""
+    outcome, winners, text, winner_team = g.final
+    g.final = None
+    await _finish(ctx, g, outcome, winners, text + reveal(g), winner_team=winner_team)
+
+
+async def final_expired(ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    g = games.get(ctx.job.chat_id)
+    if g and g.phase == Phase.FINAL and g.final:
+        await complete_final(ctx, g)
 
 
 # ---------------------------------------------------------------- /hold
@@ -554,24 +686,21 @@ def _entry_line(g: Game, i: int, e: dict) -> str:
 
 
 def summary_text(g: Game) -> str:
-    stargate = g.mode == STARGATE
-    lines = [T(g.lang, "summary_head_stargate" if stargate else "summary_head_artichoke")]
+    lines = [T(g.lang, "summary_head_stargate" if g.mode == STARGATE
+               else "summary_head_artichoke")]
     if not g.log and not g.pending:
         lines.append(T(g.lang, "summary_empty"))
-    for no in range(1, max(g.identity_no, 1) + 1):
-        entries = [e for e in g.log if e["no"] == no]
-        if stargate:
-            lines += ["", T(g.lang, "summary_identity", n=no)]
-        lines += [_entry_line(g, i, e) for i, e in enumerate(entries, 1)]
+    lines += [_entry_line(g, i, e) for i, e in enumerate(g.log, 1)]
     if g.pending:
-        lines.append(T(g.lang, "summary_pending", patient=g.name(g.patient),
-                       who=g.name(g.pending.asker), text=g.pending.text))
-    shown = [u for u in g.askers() if u != g.skip]          # Skip stays secret
+        if g.mode == ARTICHOKE:
+            lines.append(T(g.lang, "summary_pending", patient=g.name(g.patient),
+                           who=g.name(g.pending.asker), text=g.pending.text))
+        else:
+            lines.append(T(g.lang, "summary_pending_s", who=g.name(g.pending.asker),
+                           text=g.pending.text))
     lines.append("")
     lines.append(T(g.lang, "summary_moves", moves=" · ".join(
-        f"{g.name(u)} {g.moves_left(u)}" for u in shown)))
-    if stargate:
-        lines.append(T(g.lang, "summary_points", score=score_text(g)))
+        f"{g.name(u)} {g.moves_left(u)}" for u in g.askers())))
     return "\n".join(lines)[:4000]
 
 
@@ -581,8 +710,12 @@ async def summary(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not g:
         await update.message.reply_text(T(db.get_lang(chat.id), "round_none"))
         return
-    if g.phase not in (Phase.PLAYING, Phase.CHOOSING, Phase.VOTING) or g.identity_no == 0:
+    if g.phase not in (Phase.PLAYING, Phase.CHOOSING, Phase.VOTING, Phase.FINAL) \
+            or g.identity_no == 0:
         await update.message.reply_text(T(g.lang, "round_not_playing"))
+        return
+    if g.summary_off and update.effective_user.id != g.skip:
+        await update.message.reply_text(T(g.lang, "summary_off"))
         return
     await update.message.reply_text(summary_text(g))
 
@@ -592,7 +725,7 @@ async def spoiler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Delete group messages that reveal the current identity."""
     msg = update.effective_message
     g = games.get(update.effective_chat.id)
-    if not g or g.phase not in (Phase.PLAYING, Phase.VOTING) or not msg or not msg.text:
+    if not g or g.phase not in (Phase.PLAYING, Phase.VOTING, Phase.FINAL) or not msg or not msg.text:
         return
     words = g.all_spoilers()
     if not words:

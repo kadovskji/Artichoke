@@ -40,7 +40,6 @@ def _assign_stargate(g: Game, ids: list[int], has_skip: bool, size: int) -> None
         g.roles[g.skip] = SKIP
     g.team_names = random.sample(TEAM_NAMES, g.teams_count)
     for i, name in enumerate(g.team_names):
-        g.points[name] = 0
         for u in ids[i * size:(i + 1) * size]:
             g.roles[u] = RESEARCHER
             g.team[u] = name
@@ -55,12 +54,12 @@ def _role_message(g: Game, uid: int) -> tuple[str, dict]:
         if role == DR_A:
             return "dm_dr_a", {"moves": g.moves}
         return "dm_researcher_a", {"k": k, "moves": g.moves}
+    teams = ", ".join(g.team_names)
     if role == PATIENT:
-        return "dm_patient_s", {}
+        return "dm_patient_s", {"teams": teams, "skip": g.name(g.skip)}
     if role == SKIP:
-        return "dm_skip", {"k": k, "moves": g.moves}
-    return "dm_researcher_s", {"team": g.team[uid], "teams": ", ".join(g.team_names),
-                               "k": k, "moves": g.moves}
+        return "dm_skip", {"moves": g.moves}
+    return "dm_researcher_s", {"team": g.team[uid], "teams": teams, "moves": g.moves}
 
 
 # ---------------------------------------------------------------- round start
@@ -94,7 +93,11 @@ async def start_round(ctx, g: Game) -> None:
             failed.append(uid)
     if g.patient in failed:                     # K can't be reached: abort
         close_game(ctx, g, "patient unreachable")
-        await ctx.bot.send_message(g.chat_id, T(g.lang, "dm_failed", name=g.name(g.patient)))
+        if g.mode == STARGATE:                  # K is secret: don't say who
+            await ctx.bot.send_message(g.chat_id, T(g.lang, "dm_failed_s"))
+        else:
+            await ctx.bot.send_message(g.chat_id,
+                                       T(g.lang, "dm_failed", name=g.name(g.patient)))
         return
 
     if g.mode == ARTICHOKE:
@@ -102,7 +105,7 @@ async def start_round(ctx, g: Game) -> None:
         await say(ctx, g, "announce_artichoke", n=n, k=g.name(g.patient),
                   moves=g.moves, extra=extra)
     else:
-        await say(ctx, g, "announce_stargate", n=n, k=g.name(g.patient),
+        await say(ctx, g, "announce_stargate", n=n, skip=g.name(g.skip),
                   teams=", ".join(g.team_names), moves=g.moves)
     if failed:
         await say(ctx, g, "dm_warn", names=", ".join(g.name(u) for u in failed))
@@ -168,12 +171,9 @@ async def begin_play(ctx, g: Game) -> None:
     """An identity is set: the playing phase (re)starts."""
     cancel_job(ctx, "choice", g.chat_id)
     g.phase = Phase.PLAYING
-    if g.identity_no == 1:
-        g.started_at = time.time()
-        if g.dr_a is not None:
-            await dm(ctx, g.dr_a, g, "dm_identity_dra", title=g.identity.title)
-        await say(ctx, g, "play_start_artichoke" if g.mode == ARTICHOKE
-                  else "play_start_stargate", moves=g.moves)
-    else:
-        await say(ctx, g, "identity_next_go", n=g.identity_no, score=play.score_text(g))
+    g.started_at = time.time()
+    if g.dr_a is not None:
+        await dm(ctx, g.dr_a, g, "dm_identity_dra", title=g.identity.title)
+    await say(ctx, g, "play_start_artichoke" if g.mode == ARTICHOKE
+              else "play_start_stargate", moves=g.moves)
     play.touch_inactivity(ctx, g)
