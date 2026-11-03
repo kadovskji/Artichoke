@@ -1,15 +1,9 @@
-# Secrets
-.env
-
-# Local database (recreated on first start)
-*.db
-*.db-journal
-
-# Python
 __pycache__/
 *.pyc
 venv/
 .venv/
-
-# PyCharm (the Run Configuration may contain the token)
 .idea/
+.env
+*.db
+*.log
+*.log.*

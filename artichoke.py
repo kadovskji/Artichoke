@@ -1,23 +1,30 @@
 """Artichoke - a Telegram party game bot about guessing famous identities.
 
-Modes: K.H. Enigma and PSY-OPS (rules: /rules in the bot, or README.md).
+Modes: Artichoke and Stargate (rules: /rules in the bot, or README.md).
 
 Run:  BOT_TOKEN=xxxx python artichoke.py
 """
 import logging
 import os
 
-from telegram import BotCommand
-from telegram.ext import (Application, CallbackQueryHandler, CommandHandler,
-                          MessageHandler, filters)
+import logs
 
-import lobby
-import play
-import roles
-import rules
-import stats
+logs.setup()
 
-logging.basicConfig(level=logging.INFO)
+from telegram import BotCommand, Update                               # noqa: E402
+from telegram.ext import (Application, CallbackQueryHandler, ChatMemberHandler,  # noqa: E402
+                          CommandHandler, ContextTypes, MessageHandler, filters)
+
+import admin                                                          # noqa: E402
+import db                                                             # noqa: E402
+import lobby                                                          # noqa: E402
+import play                                                           # noqa: E402
+import roles                                                          # noqa: E402
+import rules                                                          # noqa: E402
+import settings                                                       # noqa: E402
+import stats                                                          # noqa: E402
+
+LOG = logging.getLogger("artichoke")
 
 TOKEN = os.environ["BOT_TOKEN"]
 
@@ -42,27 +49,62 @@ class ExplicitCommand(filters.MessageFilter):
 
 EXPLICIT = ExplicitCommand()
 
-# (command, English description, Italian description)
+# (command, English description, Italian description). /admin is deliberately not listed.
 COMMANDS = [
     ("newgame", "Create a new round", "Crea un nuovo round"),
     ("join", "Join the round", "Unisciti al round"),
-    ("ready", "Start the round now", "Avvia subito il round"),
+    ("ready", "Start the round now / resume after a pause", "Avvia subito / riprendi dopo la pausa"),
     ("wait", "Extend sign-ups: /wait <minutes>", "Prolunga le iscrizioni: /wait <minuti>"),
+    ("hold", "Pause the round: /hold <minutes>", "Pausa il round: /hold <minuti>"),
     ("ask", "Ask a yes/no question", "Fai una domanda sì/no"),
     ("try", "Try to name the identity", "Prova a indovinare l'identità"),
     ("summary", "Questions and answers so far", "Domande e risposte finora"),
     ("rules", "Get the rules in private", "Ricevi le regole in privato"),
     ("stats", "Group statistics", "Statistiche del gruppo"),
     ("mystats", "Your statistics", "Le tue statistiche"),
+    ("settings", "Group settings (admins)", "Impostazioni del gruppo (admin)"),
     ("stop", "Cancel the current round", "Annulla il round in corso"),
-    ("setlan", "Group language: en / ita", "Lingua del gruppo: en / ita"),
 ]
+
+_seen_chats: set[int] = set()
 
 
 async def post_init(app: Application) -> None:
     await app.bot.set_my_commands([BotCommand(c, en) for c, en, _ in COMMANDS])
     await app.bot.set_my_commands([BotCommand(c, it) for c, _, it in COMMANDS],
                                   language_code="it")
+
+
+async def track_group(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Remember every group where the bot sees activity (for admin announcements)."""
+    chat = update.effective_chat
+    if chat and chat.id not in _seen_chats:
+        _seen_chats.add(chat.id)
+        db.track_chat(chat.id, chat.title)
+
+
+async def my_chat_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """The bot was added to / removed from a group."""
+    change = update.my_chat_member
+    if change.chat.type == "private":
+        return
+    active = change.new_chat_member.status in ("member", "administrator")
+    db.set_chat_active(change.chat.id, active, change.chat.title)
+    if active:
+        _seen_chats.add(change.chat.id)
+    else:
+        _seen_chats.discard(change.chat.id)
+
+
+async def private_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Private text: the bot admin composing an announcement, or K sending an identity."""
+    if await admin.handle_text(update, ctx):
+        return
+    await roles.on_identity(update, ctx)
+
+
+async def on_error(update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    LOG.error("unhandled error", exc_info=ctx.error)
 
 
 def main() -> None:
@@ -78,26 +120,33 @@ def main() -> None:
     command("ready", lobby.ready)
     command("wait", lobby.wait)
     command("stop", lobby.stop)
-    command("setlan", lobby.setlan)
+    command("hold", play.hold)
     command("ask", play.ask)
     command("try", play.try_cmd)
     command("summary", play.summary)
+    command("settings", settings.settings)
     command("rules", rules.rules)
     command("stats", stats.stats)
     command("mystats", stats.mystats)
+    app.add_handler(CommandHandler("admin", admin.admin, filters=filters.ChatType.PRIVATE))
 
     app.add_handler(CallbackQueryHandler(lobby.cb_mode, pattern=r"^m:"))
+    app.add_handler(CallbackQueryHandler(lobby.cb_teams, pattern=r"^t:"))
     app.add_handler(CallbackQueryHandler(lobby.cb_moves, pattern=r"^n:"))
     app.add_handler(CallbackQueryHandler(play.cb_answer, pattern=r"^a:"))
     app.add_handler(CallbackQueryHandler(play.cb_vote, pattern=r"^v:"))
+    app.add_handler(CallbackQueryHandler(settings.cb_settings, pattern=r"^s:"))
+    app.add_handler(CallbackQueryHandler(admin.cb_admin, pattern=r"^ad:"))
 
-    # Private text: a patient sending the identity they chose
+    app.add_handler(MessageHandler(filters.ChatType.GROUPS, track_group), group=-2)
+    app.add_handler(ChatMemberHandler(my_chat_member, ChatMemberHandler.MY_CHAT_MEMBER))
     app.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, roles.on_identity))
-    # Group text: spoiler filter
+        filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, private_text))
     app.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, play.spoiler))
+    app.add_error_handler(on_error)
 
+    LOG.info("bot starting (admins: %d)", len(admin.ADMIN_IDS))
     app.run_polling()
 
 

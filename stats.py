@@ -3,7 +3,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 import db
-from game import ENIGMA, PSYOPS
+from game import ARTICHOKE, STARGATE
 from i18n import T
 
 MIN_DR_A_GAMES = 3      # Dr. A ranking needs at least this many games as Dr. A
@@ -15,7 +15,7 @@ _NAME = "COALESCE(u.name, MAX(rp.name))"
 
 
 def _mode_names(lang: str) -> dict[str, str]:
-    return {ENIGMA: T(lang, "mode_enigma"), PSYOPS: T(lang, "mode_psyops")}
+    return {ARTICHOKE: T(lang, "mode_artichoke"), STARGATE: T(lang, "mode_stargate")}
 
 
 def _ranking(rows: list[tuple]) -> list[str]:
@@ -39,7 +39,6 @@ async def stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     breakdown = " · ".join(f"{names.get(m, m)} {n}" for m, n in by_mode)
     lines = [T(lang, "stats_title"), T(lang, "stats_rounds", total=total, breakdown=breakdown)]
 
-    # Top 5 by round wins / by identities guessed
     top_wins = db.query(
         f"SELECT {_NAME}, SUM(rp.won) AS n {_BASE} GROUP BY rp.user_id "
         "HAVING n > 0 ORDER BY n DESC, rp.user_id LIMIT 5", cid)
@@ -51,9 +50,8 @@ async def stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if top_guess:
         lines += ["", T(lang, "stats_top_guess")] + _ranking(top_guess)
 
-    # Player with most wins in each mode
     best = []
-    for mode in (ENIGMA, PSYOPS):
+    for mode in (ARTICHOKE, STARGATE):
         row = db.query(
             f"SELECT {_NAME}, SUM(rp.won) AS n {_BASE} AND r.mode = ? "
             "GROUP BY rp.user_id HAVING n > 0 ORDER BY n DESC, rp.user_id LIMIT 1",
@@ -63,7 +61,6 @@ async def stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if best:
         lines += ["", T(lang, "stats_mode_best"), " · ".join(best)]
 
-    # Dr. A who was caught least often (by rate, min. games)
     lines.append("")
     dra = db.query(
         f"SELECT {_NAME}, COUNT(*) AS n, SUM(rp.caught) AS c {_BASE} AND rp.role = 'dr_a' "
@@ -75,16 +72,16 @@ async def stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     else:
         lines.append(T(lang, "stats_dra_none", min=MIN_DR_A_GAMES))
 
-    # Extras: fastest solve, spy wins
     fast = db.query(
-        f"SELECT COALESCE(u.name, rp.name), rp.moves {_BASE} "
-        "AND rp.guessed > 0 AND rp.role != 'spy' ORDER BY rp.moves ASC LIMIT 1", cid)
+        f"SELECT COALESCE(u.name, rp.name), rp.solve_moves {_BASE} "
+        "AND rp.solve_moves IS NOT NULL AND rp.role != 'skip' "
+        "ORDER BY rp.solve_moves ASC LIMIT 1", cid)
     if fast:
         lines.append(T(lang, "stats_fastest", name=fast[0][0], moves=fast[0][1]))
-    spy_wins = db.query(
-        "SELECT COUNT(*) FROM rounds WHERE chat_id = ? AND outcome = 'spy_win'", cid)[0][0]
-    if spy_wins:
-        lines.append(T(lang, "stats_spy", n=spy_wins))
+    skip_wins = db.query(
+        "SELECT COUNT(*) FROM rounds WHERE chat_id = ? AND outcome = 'skip_win'", cid)[0][0]
+    if skip_wins:
+        lines.append(T(lang, "stats_skip", n=skip_wins))
 
     await update.message.reply_text("\n".join(lines))
 
@@ -101,8 +98,7 @@ async def mystats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     played, wins, guessed, fastest = db.query(
         "SELECT COUNT(*), COALESCE(SUM(rp.won), 0), COALESCE(SUM(rp.guessed), 0), "
-        f"MIN(CASE WHEN rp.guessed > 0 AND rp.role != 'spy' THEN rp.moves END) {base}",
-        params)[0]
+        f"MIN(CASE WHEN rp.role != 'skip' THEN rp.solve_moves END) {base}", params)[0]
     if not played:
         await update.message.reply_text(T(lang, "my_empty"))
         return

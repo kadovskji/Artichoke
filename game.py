@@ -1,46 +1,105 @@
-"""Shared game model, registry, timers and small helpers."""
+"""Shared game model, registry, timers and helpers."""
+import logging
 import re
+import time
 import unicodedata
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from typing import Any, Callable
 
 from telegram.error import TelegramError
 
 from i18n import T
 
-# ---------------------------------------------------------------- constants
-ENIGMA = "enigma"
-PSYOPS = "psyops"
-MIN_PLAYERS = {ENIGMA: 2, PSYOPS: 4}
-DR_A_MIN_PLAYERS = 5            # Enigma: Dr. A only plays with this many players
-MOVE_OPTIONS = (5, 10, 15, 20)  # moves (questions + attempts) per participant
+LOG = logging.getLogger("artichoke.game")     # game events end up in the log file
+
+# ---------------------------------------------------------------- modes
+ARTICHOKE = "artichokemode"     # one patient K, researchers, maybe Dr. A
+STARGATE = "stargatemode"       # teams race to identify K's identities
+MODES = (ARTICHOKE, STARGATE)
+
+TEAM_NAMES = ("Grill Flame", "Center Lane", "Sun Streak", "Gondola Wish")
+TEAM_COUNTS = (2, 3, 4)
+POINTS_TO_WIN = 2               # Stargate: identities a team must guess
+SKIP_MAX_TRIES = 5              # Stargate: attempts Agent Skip can hold at once
+
+DR_A_MIN_PLAYERS = 5            # Artichoke: Dr. A and the final vote need this many players
+DR_A_ABSENT_CHANCE = 0.3        # default setting: Dr. A is absent in 30% of the rounds
+
+MOVE_OPTIONS = (5, 7, 10, 15, 20)   # moves per person when the round creator chooses them
 
 # Timings, in seconds
-CONFIG_SECONDS = 120        # creator must pick mode / moves
+CONFIG_SECONDS = 120        # creator must pick mode / teams / moves
 LOBBY_SECONDS = 300         # sign-up window
-CHOICE_SECONDS = 120        # patients must pick their identity
-ANSWER_SECONDS = 120        # patient must answer a question
-INACTIVITY_SECONDS = 600    # Enigma: round ends after this much inactivity
-PSYOPS_SECONDS = 600        # PSY-OPS: total round time
-VOTE_SECONDS = 60           # Dr. A vote
+CHOICE_SECONDS = 120        # K must pick an identity
+ANSWER_SECONDS = 300        # K must answer a question
+INACTIVITY_SECONDS = 600    # the round ends after this much inactivity
+VOTE_SECONDS = 90           # Dr. A vote
 WAIT_MAX_MINUTES = 10       # max extension per /wait
+HOLD_MAX_MINUTES = 10       # max length of a single /hold
+HOLD_TOTAL_SECONDS = 1800   # max total pause time per round
 
 # Roles
-PATIENT, RESEARCHER, DR_A, SPY = "patient", "researcher", "dr_a", "spy"
-
-# PSY-OPS teams
-TEAMS = ("artichoke", "bluebird")
-TEAM_LETTER = {"artichoke": "K", "bluebird": "H"}   # patient names
-TEAM_ICON = {"artichoke": "🟢", "bluebird": "🔵"}
+PATIENT, RESEARCHER, DR_A, SKIP = "patient", "researcher", "dr_a", "skip"
 
 
 class Phase(Enum):
     MODE = auto()       # creator picks the mode
-    MOVES = auto()      # creator picks moves per participant
+    TEAMS = auto()      # Stargate: creator picks the number of teams
+    MOVES = auto()      # creator picks the moves per person (if the group allows it)
     LOBBY = auto()      # sign-ups
-    CHOOSING = auto()   # patients choose their identity
+    CHOOSING = auto()   # K chooses an identity
     PLAYING = auto()
-    VOTING = auto()     # Enigma: vote to unmask Dr. A
+    VOTING = auto()     # Artichoke: vote to unmask Dr. A
+
+
+# ---------------------------------------------------------------- rules helpers
+def min_players(mode: str, teams: int = 2) -> int:
+    """Minimum number of players for a mode (Stargate depends on the teams)."""
+    if mode == ARTICHOKE:
+        return 2
+    return {2: 3, 3: 7, 4: 9}.get(teams, 3)
+
+
+def auto_moves(n_players: int) -> int:
+    """Moves per person, computed from the number of players."""
+    if n_players <= 2:
+        return 25
+    if n_players == 3:
+        return 15
+    if n_players <= 6:
+        return 10
+    if n_players <= 8:
+        return 7
+    if n_players <= 15:
+        return 5
+    return 3
+
+
+def stargate_layout(n_players: int, teams: int) -> tuple[bool, int] | None:
+    """How to split `n_players` for a Stargate round: (has_skip, team_size), or None.
+
+    K is always there. Agent Skip plays when the total number of players is even;
+    if the researchers can't be split evenly that way, the opposite choice is tried.
+    Teams need at least 2 researchers each, except with 2 teams (1 is enough).
+    """
+    min_size = 1 if teams == 2 else 2
+    preferred = n_players % 2 == 0
+    for skip in (preferred, not preferred):
+        researchers = n_players - 1 - (1 if skip else 0)
+        if researchers >= teams * min_size and researchers % teams == 0:
+            return skip, researchers // teams
+    return None
+
+
+def valid_totals(teams: int, start: int, count: int = 4) -> list[int]:
+    """The next `count` numbers of players (from `start`) that give even teams."""
+    out, n = [], max(start, 1)
+    while len(out) < count and n < start + 60:
+        if stargate_layout(n, teams):
+            out.append(n)
+        n += 1
+    return out
 
 
 # ---------------------------------------------------------------- text helpers
@@ -58,6 +117,12 @@ def compact(s: str) -> str:
 def wiki_langs(lang: str) -> tuple[str, str]:
     """Wikipedia language editions to search, in order."""
     return ("it", "en") if lang == "it" else ("en", "it")
+
+
+def fmt_duration(seconds: float) -> str:
+    seconds = max(0, int(round(seconds)))
+    m, s = divmod(seconds, 60)
+    return f"{m}m {s:02d}s" if m else f"{s}s"
 
 
 # ---------------------------------------------------------------- model
@@ -78,7 +143,6 @@ def make_identity(typed: str, title: str) -> Identity:
 @dataclass
 class Question:
     id: int
-    key: str                    # "main" (Enigma) or team name (PSY-OPS)
     asker: int
     text: str
     message_id: int | None = None
@@ -90,60 +154,66 @@ class Game:
     creator: int
     lang: str
     mode: str | None = None
-    moves: int = 0
+    teams_count: int = 0                        # Stargate
+    moves: int = 0                              # moves per person; 0 = automatic (set at start)
     phase: Phase = Phase.MODE
     players: dict[int, str] = field(default_factory=dict)     # user_id -> name
     lobby_end: float = 0.0
     started_at: float = 0.0
 
     roles: dict[int, str] = field(default_factory=dict)
-    team: dict[int, str] = field(default_factory=dict)        # PSY-OPS: user_id -> team
-    patients: dict[str, int] = field(default_factory=dict)    # key -> user_id
-    identities: dict[str, Identity] = field(default_factory=dict)
-    awaiting: set[int] = field(default_factory=set)           # patients yet to choose
+    team: dict[int, str] = field(default_factory=dict)        # Stargate: user_id -> team name
+    team_names: list[str] = field(default_factory=list)       # Stargate: teams in play
+    patient: int | None = None                                # K
     dr_a: int | None = None
-    spy: int | None = None
+    skip: int | None = None
 
-    moves_used: dict[int, int] = field(default_factory=dict)
-    pending: dict[str, Question] = field(default_factory=dict)
+    identity: Identity | None = None                          # current identity
+    used_identities: list[Identity] = field(default_factory=list)
+    identity_no: int = 0                                      # 1 = first identity of the round
+    awaiting_identity: bool = False
+
+    moves_used: dict[int, int] = field(default_factory=dict)  # for the current identity
+    total_moves: dict[int, int] = field(default_factory=dict) # of the identities already played
+    pending: Question | None = None
     log: list[dict] = field(default_factory=list)
     counter: int = 0
 
-    spy_tries: int = 0          # attempts currently available to the spy
-    spy_used: int = 0
-    spy_found: set[str] = field(default_factory=set)
+    points: dict[str, int] = field(default_factory=dict)      # Stargate
+    solved: list[tuple[str, str, str]] = field(default_factory=list)  # (title, team, guesser)
+    skip_tries: int = 0                                       # attempts Skip holds right now
+    skip_used: int = 0
+    guessed: dict[int, int] = field(default_factory=dict)     # identities guessed per player
+    solve_moves: dict[int, int] = field(default_factory=dict) # moves used at the best guess
 
-    votes: dict[int, int] = field(default_factory=dict)       # voter -> suspect
+    votes: dict[int, Any] = field(default_factory=dict)       # voter -> uid | "none" | "skip"
     permission_warned: bool = False
+
+    paused: bool = False
+    pause_started: float = 0.0
+    pause_planned: float = 0.0                                # when the current /hold ends
+    hold_used: set[int] = field(default_factory=set)
+    hold_spent: float = 0.0
+    frozen: list[tuple] = field(default_factory=list)         # timers frozen by /hold
 
     def name(self, uid: int) -> str:
         return self.players.get(uid, "?")
 
-    def patient_key(self, uid: int) -> str | None:
-        for key, patient in self.patients.items():
-            if patient == uid:
-                return key
-        return None
-
-    def key_of(self, uid: int) -> str | None:
-        """Key of the question queue / identity a researcher works on."""
-        return "main" if self.mode == ENIGMA else self.team.get(uid)
-
     def researchers(self) -> list[int]:
         return [u for u in self.players if self.roles.get(u) == RESEARCHER]
 
-    def movers(self) -> list[int]:
-        """Everyone with a pool of moves (researchers, plus Dr. A)."""
-        return [u for u in self.players if self.roles.get(u) in (RESEARCHER, DR_A)]
+    def askers(self) -> list[int]:
+        """Everyone who can ask questions (and has a pool of moves)."""
+        return [u for u in self.players if self.roles.get(u) in (RESEARCHER, DR_A, SKIP)]
+
+    def team_members(self, team: str) -> list[int]:
+        return [u for u in self.players if self.team.get(u) == team]
 
     def moves_left(self, uid: int) -> int:
         return self.moves - self.moves_used.get(uid, 0)
 
     def all_spoilers(self) -> set[str]:
-        out: set[str] = set()
-        for ident in self.identities.values():
-            out |= ident.spoiler
-        return out
+        return set(self.identity.spoiler) if self.identity else set()
 
 
 # ---------------------------------------------------------------- registry
@@ -151,30 +221,54 @@ games: dict[int, Game] = {}        # chat_id -> game
 user_game: dict[int, int] = {}     # user_id -> chat_id (one active round per user)
 
 
-# ---------------------------------------------------------------- jobs
+# ---------------------------------------------------------------- timers
+@dataclass
+class Timer:
+    callback: Callable
+    end: float
+    data: Any
+
+
+timers: dict[tuple[int, str, str], Timer] = {}    # (chat_id, kind, key) -> pending timer
+
+
 def job_name(kind: str, chat_id: int, key: str = "") -> str:
     return f"{kind}:{chat_id}:{key}"
 
 
 def cancel_job(ctx, kind: str, chat_id: int, key: str = "") -> None:
+    timers.pop((chat_id, kind, key), None)
     for job in ctx.job_queue.get_jobs_by_name(job_name(kind, chat_id, key)):
         job.schedule_removal()
 
 
 def schedule(ctx, callback, seconds: float, kind: str, chat_id: int,
              key: str = "", data=None) -> None:
-    """(Re)schedule a one-shot job, replacing any previous one with the same name."""
+    """(Re)schedule a one-shot job, replacing any previous one with the same name.
+
+    The deadline is remembered in `timers` so that /hold can freeze and resume it.
+    """
     cancel_job(ctx, kind, chat_id, key)
-    ctx.job_queue.run_once(callback, max(0, seconds), chat_id=chat_id,
+    seconds = max(0.0, seconds)
+    ident = (chat_id, kind, key)
+    timers[ident] = Timer(callback, time.time() + seconds, data)
+
+    async def run(c, _callback=callback, _ident=ident):
+        timers.pop(_ident, None)
+        await _callback(c)
+
+    ctx.job_queue.run_once(run, seconds, chat_id=chat_id,
                            name=job_name(kind, chat_id, key), data=data)
 
 
-def close_game(ctx, g: Game) -> None:
+def close_game(ctx, g: Game, reason: str = "closed") -> None:
     """Remove a game from the registry and cancel all of its timers."""
-    for kind in ("config", "lobby", "choice", "inactivity", "round", "vote"):
+    LOG.info("round closed: chat=%s mode=%s reason=%s", g.chat_id, g.mode, reason)
+    for (cid, kind, key) in list(timers):
+        if cid == g.chat_id:
+            cancel_job(ctx, kind, cid, key)
+    for kind in ("config", "lobby", "choice", "inactivity", "answer", "vote", "hold"):
         cancel_job(ctx, kind, g.chat_id)
-    for key in ("main",) + TEAMS:
-        cancel_job(ctx, "answer", g.chat_id, key)
     for uid in g.players:
         user_game.pop(uid, None)
     games.pop(g.chat_id, None)
@@ -193,3 +287,11 @@ async def dm(ctx, uid: int, g: Game, key: str, **kw) -> bool:
         return True
     except TelegramError:
         return False
+
+
+async def is_admin(ctx, chat_id: int, user_id: int) -> bool:
+    try:
+        member = await ctx.bot.get_chat_member(chat_id, user_id)
+    except TelegramError:
+        return False
+    return member.status in ("administrator", "creator")

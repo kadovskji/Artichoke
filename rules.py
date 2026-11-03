@@ -5,7 +5,7 @@ from telegram.ext import ContextTypes
 
 import db
 import lobby
-from game import ENIGMA, PSYOPS, games, user_game
+from game import ARTICHOKE, STARGATE, games, user_game
 from i18n import T
 
 
@@ -21,8 +21,7 @@ async def rules(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     else:
         lang = "it" if (user.language_code or "").startswith("it") else "en"
 
-    # Inside a round: only the rules of the mode being played (if already chosen)
-    modes = [g.mode] if g and g.mode else [ENIGMA, PSYOPS]
+    modes = [g.mode] if g and g.mode else [ARTICHOKE, STARGATE]
     try:
         for key in ["rules_general"] + [f"rules_{m}" for m in modes]:
             await ctx.bot.send_message(user.id, T(lang, key))
