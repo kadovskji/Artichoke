@@ -18,6 +18,11 @@ ARTICHOKE = "artichokemode"     # one patient K, researchers, maybe Dr. A
 STARGATE = "stargatemode"       # teams race to identify K's identities
 MODES = (ARTICHOKE, STARGATE)
 
+# Special (non-random) variants: the creator of the round gets a fixed role.
+RANDOM, MUNCHAUSEN, PSYCHOSIS = "random", "munchausen", "psychosis"
+VARIANTS = {ARTICHOKE: (RANDOM, MUNCHAUSEN),    # Munchausen: the creator is Patient K
+            STARGATE: (RANDOM, PSYCHOSIS)}      # Psychosis: the creator is Agent Skip
+
 TEAM_NAMES = ("Grill Flame", "Center Lane", "Sun Streak", "Gondola Wish")
 TEAM_COUNTS = (2, 3, 4)
 SKIP_MAX_TRIES = 2              # Stargate: arrests Agent Skip can hold at once
@@ -45,6 +50,7 @@ PATIENT, RESEARCHER, DR_A, SKIP = "patient", "researcher", "dr_a", "skip"
 
 class Phase(Enum):
     MODE = auto()       # creator picks the mode
+    VARIANT = auto()    # creator picks random or a special variant (if the group allows it)
     TEAMS = auto()      # Stargate: creator picks the number of teams
     MOVES = auto()      # creator picks the moves per person (if the group allows it)
     LOBBY = auto()      # sign-ups
@@ -153,6 +159,7 @@ class Game:
     creator: int
     lang: str
     mode: str | None = None
+    variant: str = RANDOM                       # RANDOM, MUNCHAUSEN or PSYCHOSIS
     teams_count: int = 0                        # Stargate
     moves: int = 0                              # moves per person; 0 = automatic (set at start)
     phase: Phase = Phase.MODE

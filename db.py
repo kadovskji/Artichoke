@@ -7,12 +7,14 @@ import time
 DB_FILE = os.environ.get("DB_FILE", "artichoke.db")
 LOG = logging.getLogger("artichoke.game")
 
-DEFAULT_SETTINGS = {"lang": "en", "breaks": "on", "attempts": "auto", "dra": "random"}
+DEFAULT_SETTINGS = {"lang": "en", "breaks": "on", "attempts": "auto", "dra": "random",
+                    "variants": "off"}
 ALLOWED_SETTINGS = {
     "lang": ("en", "it"),
     "breaks": ("on", "admins", "off"),      # who can use /hold
     "attempts": ("auto", "creator"),        # moves per person: computed, or chosen by the creator
     "dra": ("random", "always"),            # Dr. A: 30% chance of being absent, or always present
+    "variants": ("off", "on"),              # special (non-random) game variants
 }
 
 _db = sqlite3.connect(DB_FILE)
@@ -56,6 +58,8 @@ def _add_column(table: str, column: str, ddl: str) -> None:
 _add_column("chat_settings", "breaks", "TEXT NOT NULL DEFAULT 'on'")
 _add_column("chat_settings", "attempts", "TEXT NOT NULL DEFAULT 'auto'")
 _add_column("chat_settings", "dra", "TEXT NOT NULL DEFAULT 'random'")
+_add_column("chat_settings", "variants", "TEXT NOT NULL DEFAULT 'off'")
+_add_column("rounds", "variant", "TEXT")
 _add_column("round_players", "solve_moves", "INTEGER")
 
 # Rounds played with the old modes (enigma / psyops) follow different rules: drop them.
@@ -105,11 +109,11 @@ def has_started(uid: int) -> bool:
 
 # ---------------------------------------------------------------- group settings
 def get_settings(chat_id: int) -> dict:
-    rows = query("SELECT lang, breaks, attempts, dra FROM chat_settings WHERE chat_id = ?",
+    rows = query("SELECT lang, breaks, attempts, dra, variants FROM chat_settings WHERE chat_id = ?",
                  (chat_id,))
     if not rows:
         return dict(DEFAULT_SETTINGS)
-    return dict(zip(("lang", "breaks", "attempts", "dra"), rows[0]))
+    return dict(zip(("lang", "breaks", "attempts", "dra", "variants"), rows[0]))
 
 
 def get_lang(chat_id: int) -> str:
@@ -162,10 +166,10 @@ def record_round(g, outcome: str, winners: set[int], caught: bool,
     now = int(time.time())
     cur = _db.execute(
         "INSERT INTO rounds (chat_id, ts, mode, players, moves_limit, moves_total, "
-        "duration, outcome, winner_team, identities) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        "duration, outcome, winner_team, identities, variant) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         (g.chat_id, now, g.mode, len(g.players), g.moves, sum(moves.values()),
          int(now - g.started_at), outcome, winner_team,
-         " | ".join(i.title for i in g.used_identities)))
+         " | ".join(i.title for i in g.used_identities), g.variant))
     rows = [
         (cur.lastrowid, uid, name, g.roles.get(uid), g.team.get(uid),
          int(uid in winners), g.guessed.get(uid, 0),

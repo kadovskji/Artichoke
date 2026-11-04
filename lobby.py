@@ -8,19 +8,23 @@ from telegram.ext import ContextTypes
 import db
 import play
 import roles
-from game import (ARTICHOKE, CONFIG_SECONDS, LOBBY_SECONDS, MOVE_OPTIONS, STARGATE,
+from game import (ARTICHOKE, CONFIG_SECONDS, LOBBY_SECONDS, MOVE_OPTIONS, RANDOM, STARGATE,
+                  VARIANTS,
                   TEAM_COUNTS, WAIT_MAX_MINUTES, Game, Phase, cancel_job, close_game,
                   fmt_duration, games, is_admin, min_players, schedule, stargate_layout,
                   user_game, valid_totals)
 from i18n import T
 
-CONFIG_PHASES = (Phase.MODE, Phase.TEAMS, Phase.MOVES)
+CONFIG_PHASES = (Phase.MODE, Phase.VARIANT, Phase.TEAMS, Phase.MOVES)
 
 
 def mode_name(g: Game) -> str:
+    name = T(g.lang, "mode_stargate" if g.mode == STARGATE else "mode_artichoke")
     if g.mode == STARGATE:
-        return f"{T(g.lang, 'mode_stargate')} ({T(g.lang, 'teams_n', n=g.teams_count)})"
-    return T(g.lang, "mode_artichoke")
+        name += f" ({T(g.lang, 'teams_n', n=g.teams_count)})"
+    if g.variant != RANDOM:
+        name += f" · {T(g.lang, 'variant_' + g.variant)}"
+    return name
 
 
 def lobby_text(g: Game) -> str:
@@ -132,7 +136,20 @@ async def cb_mode(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     g.mode = mode
     schedule(ctx, config_expired, CONFIG_SECONDS, "config", g.chat_id)
     await q.answer()
-    if mode == STARGATE:
+    if db.get_settings(g.chat_id)["variants"] == "on":
+        g.phase = Phase.VARIANT
+        await q.edit_message_text(
+            T(g.lang, f"pick_variant_{mode}"),
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton(T(g.lang, f"btn_variant_{v}"), callback_data=f"r:{v}")
+                for v in VARIANTS[mode]]]))
+        return
+    await _after_variant(ctx, q, g)
+
+
+async def _after_variant(ctx, q, g: Game) -> None:
+    """Mode (and variant) chosen: Stargate asks for the teams, Artichoke goes on."""
+    if g.mode == STARGATE:
         g.phase = Phase.TEAMS
         await q.edit_message_text(
             T(g.lang, "pick_teams"),
@@ -141,6 +158,21 @@ async def cb_mode(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 for n in TEAM_COUNTS]]))
         return
     await _after_options(ctx, q, g)
+
+
+async def cb_variant(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    g = games.get(q.message.chat_id)
+    if not await _creator_gate(q, g, Phase.VARIANT):
+        return
+    variant = q.data.split(":")[1]
+    if variant not in VARIANTS[g.mode]:
+        await q.answer()
+        return
+    g.variant = variant
+    schedule(ctx, config_expired, CONFIG_SECONDS, "config", g.chat_id)
+    await q.answer()
+    await _after_variant(ctx, q, g)
 
 
 async def cb_teams(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:

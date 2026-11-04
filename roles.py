@@ -11,7 +11,8 @@ import db
 import play
 import wiki
 from game import (ARTICHOKE, CHOICE_SECONDS, DR_A, DR_A_ABSENT_CHANCE, DR_A_MIN_PLAYERS,
-                  PATIENT, RESEARCHER, SKIP, STARGATE, TEAM_NAMES, Game, Phase, auto_moves,
+                  MUNCHAUSEN, PATIENT, PSYCHOSIS, RESEARCHER, SKIP, STARGATE, TEAM_NAMES,
+                  Game, Phase, auto_moves,
                   cancel_job, close_game, dm, games, make_identity, say, schedule,
                   stargate_layout, user_game, valid_totals, wiki_langs)
 from i18n import T
@@ -21,7 +22,11 @@ LOG = logging.getLogger("artichoke.game")
 
 # ---------------------------------------------------------------- role assignment
 def _assign_artichoke(g: Game, ids: list[int]) -> None:
-    g.patient = ids.pop()
+    if g.variant == MUNCHAUSEN:                 # the creator is Patient K
+        ids.remove(g.creator)
+        g.patient = g.creator
+    else:
+        g.patient = ids.pop()
     g.roles[g.patient] = PATIENT
     if len(g.players) >= DR_A_MIN_PLAYERS:
         always = db.get_settings(g.chat_id)["dra"] == "always"
@@ -33,9 +38,13 @@ def _assign_artichoke(g: Game, ids: list[int]) -> None:
 
 
 def _assign_stargate(g: Game, ids: list[int], has_skip: bool, size: int) -> None:
+    if g.variant == PSYCHOSIS:                  # the creator is Agent Skip
+        ids.remove(g.creator)
+        g.skip = g.creator
+        g.roles[g.skip] = SKIP
     g.patient = ids.pop()
     g.roles[g.patient] = PATIENT
-    if has_skip:
+    if has_skip and g.skip is None:
         g.skip = ids.pop()
         g.roles[g.skip] = SKIP
     g.team_names = random.sample(TEAM_NAMES, g.teams_count)

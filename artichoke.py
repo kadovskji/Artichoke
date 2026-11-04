@@ -133,6 +133,7 @@ def main() -> None:
     app.add_handler(CommandHandler("admin", admin.admin, filters=filters.ChatType.PRIVATE))
 
     app.add_handler(CallbackQueryHandler(lobby.cb_mode, pattern=r"^m:"))
+    app.add_handler(CallbackQueryHandler(lobby.cb_variant, pattern=r"^r:"))
     app.add_handler(CallbackQueryHandler(lobby.cb_teams, pattern=r"^t:"))
     app.add_handler(CallbackQueryHandler(lobby.cb_moves, pattern=r"^n:"))
     app.add_handler(CallbackQueryHandler(play.cb_answer, pattern=r"^a:"))

@@ -7,7 +7,7 @@ import db
 from game import games, is_admin
 from i18n import T
 
-KEYS = ("lang", "breaks", "attempts", "dra")
+KEYS = ("lang", "breaks", "attempts", "dra", "variants")
 
 
 def _menu(chat_id: int) -> tuple[str, InlineKeyboardMarkup]:

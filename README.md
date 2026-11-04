@@ -77,6 +77,19 @@ Besides Whistleblower K and Agent Skip, the researchers are split into teams of 
 - If nobody names the identity and Skip doesn't find K, nobody wins.
 
 
+### 🎭 Special variants (optional)
+
+By default all roles are drawn at random. If the group admins enable **Special modes** in `/settings` (off by default), after choosing the mode the creator of the round also picks a variant:
+
+| Mode | Variant | What changes |
+|:---:|:---:|:---:|
+| 🧪 Artichoke | 🎲 Random | All roles are drawn at random (default) |
+| 🧪 Artichoke | 🩺 Munchausen | Whoever started the round is automatically Patient K; the other roles are drawn at random |
+| 🕵️ Stargate | 🎲 Random | All roles are drawn at random (default) |
+| 🕵️ Stargate | 🌀 Psychosis | Whoever started the round is automatically Agent Skip; the other roles are drawn at random |
+
+The variant is shown in the sign-up message and saved with the round. Nothing else changes in the rules.
+
 ## Common rules
 
 - *Don't know* answers don't cost the asker a move; a wrong attempt costs a move. Attempts are matched ignoring case, spaces, accents and punctuation, and through Wikipedia redirects (so "Dante" matches "Dante Alighieri").
@@ -89,7 +102,7 @@ Besides Whistleblower K and Agent Skip, the researchers are split into teams of 
 | Command | Description |
 |---|---|
 | `/start` | Run it once in a private chat with the bot, so it can message you |
-| `/newgame` | Create a round: choose the mode (and teams, and moves if the group allows it) |
+| `/newgame` | Create a round: choose the mode (and the variant, teams and moves if the group allows it) |
 | `/join` | Join the round |
 | `/ready` | Start the round now (any joined player, if there are enough players); during a pause, resume the round |
 | `/wait <minutes>` | Extend the sign-up window (max 10 per use, decimals allowed, e.g. `/wait 3.5`) |
@@ -115,6 +128,7 @@ Sign-ups last 5 minutes. `/setlan` no longer exists: the language is now in `/se
 | ⏸ Allow breaks | Everyone / Admins only / Off | Everyone |
 | 🎯 Attempts | Automatic / Chosen by the creator (5, 7, 10, 15, 20) | Automatic |
 | 🧑‍🔬 Dr. A | 30% chance of absence / Always present (5+ players) | 30% absence |
+| 🎭 Special modes | Off / On (enables the Munchausen and Psychosis variants) | Off |
 
 ### Bot administration (`/admin`)
 
