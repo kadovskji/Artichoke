@@ -6,6 +6,7 @@ Messages are in Italian: the panel is for the bot owner only.
 """
 import asyncio
 import html
+import json
 import logging
 import os
 import sys
@@ -19,6 +20,9 @@ import logs
 from game import games
 
 LOG = logging.getLogger("artichoke.admin")
+
+# Where /admin → Restart remembers the panel message, to confirm the restart afterwards
+RESTART_FILE = os.environ.get("RESTART_FILE", "restart.flag")
 
 ADMIN_IDS = {int(x) for x in os.environ.get("ADMIN_ID", "").replace(" ", "").split(",")
              if x.strip().isdigit()}
@@ -178,9 +182,32 @@ async def restart(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     deliver it again to the new process (which would restart it forever).
     """
     LOG.info("restart requested by %s", update.effective_user.id)
+    msg = update.callback_query.message if update.callback_query else None
+    if msg:
+        try:
+            with open(RESTART_FILE, "w", encoding="utf-8") as f:
+                json.dump({"chat_id": msg.chat_id, "message_id": msg.message_id}, f)
+        except OSError as e:
+            LOG.warning("could not save the restart marker: %s", e)
     try:
         await ctx.bot.get_updates(offset=update.update_id + 1, limit=1, timeout=0)
     except TelegramError as e:
         LOG.warning("could not acknowledge the update before restarting: %s", e)
     logging.shutdown()
     os.execv(sys.executable, [sys.executable] + sys.argv)
+
+
+async def notify_restart(bot) -> None:
+    """After a restart requested from /admin: turn the panel message into a confirmation."""
+    try:
+        with open(RESTART_FILE, encoding="utf-8") as f:
+            info = json.load(f)
+        os.remove(RESTART_FILE)
+    except (OSError, ValueError):
+        return
+    text, kb = _menu()
+    try:
+        await bot.edit_message_text("✅ Bot riavviato.\n\n" + text, chat_id=info["chat_id"],
+                                    message_id=info["message_id"], reply_markup=kb)
+    except (TelegramError, KeyError) as e:
+        LOG.warning("could not confirm the restart: %s", e)

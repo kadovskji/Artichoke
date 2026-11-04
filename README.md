@@ -135,7 +135,7 @@ Sign-ups last 5 minutes. `/setlan` no longer exists: the language is now in `/se
 Only the Telegram user IDs listed in the `ADMIN_ID` environment variable can use it, and only in a private chat with the bot (for anyone else the command does nothing). Find your ID with [@userinfobot](https://t.me/userinfobot). The panel is in Italian and has four buttons:
 
 - **📢 Update**: you write an announcement in English and in Italian; after a preview it is sent to every group where the bot is present, in the language of each group.
-- **🔁 Restart**: restarts the bot process (after confirmation; rounds in progress are lost). With `systemd` the service keeps running under the same unit.
+- **🔁 Restart**: restarts the bot process (after confirmation; rounds in progress are lost). With `systemd` the service keeps running under the same unit. When the bot is back, the panel message changes to “✅ Bot riavviato.”
 - **⬇️ Pull**: runs `git pull --ff-only` and `pip install -r requirements.txt` in the bot's folder and shows the result, with a shortcut to restart.
 - **📜 Log**: the last 50 log lines of the past hour.
 

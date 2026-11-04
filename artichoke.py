@@ -71,6 +71,7 @@ _seen_chats: set[int] = set()
 
 
 async def post_init(app: Application) -> None:
+    await admin.notify_restart(app.bot)
     await app.bot.set_my_commands([BotCommand(c, en) for c, en, _ in COMMANDS])
     await app.bot.set_my_commands([BotCommand(c, it) for c, _, it in COMMANDS],
                                   language_code="it")
