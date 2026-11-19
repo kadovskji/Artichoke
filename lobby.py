@@ -211,7 +211,11 @@ async def join(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if g and g.phase in CONFIG_PHASES:
         await update.message.reply_text(T(lang, "join_wait_config"))
         return
-    if not g or g.phase != Phase.LOBBY:
+    late = bool(g) and g.phase in (Phase.CHOOSING, Phase.PLAYING)
+    if g and g.phase in (Phase.VOTING, Phase.FINAL):
+        await update.message.reply_text(T(g.lang, "join_late_closed"))
+        return
+    if not g or (g.phase != Phase.LOBBY and not late):
         await update.message.reply_text(T(lang, "lobby_none"))
         return
     if user.id in g.players:
@@ -224,6 +228,10 @@ async def join(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await ask_activation(update, ctx, lang)
         return
     db.touch_user(user.id, user.first_name)
+    if late:                                    # round in progress: join as a researcher
+        if not await roles.late_join(ctx, g, user.id, user.first_name):
+            await update.message.reply_text(T(g.lang, "join_late_dm", name=user.first_name))
+        return
     g.players[user.id] = user.first_name
     user_game[user.id] = chat.id
     await update.message.reply_text(

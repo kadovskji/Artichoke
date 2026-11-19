@@ -184,10 +184,12 @@ class Game:
     pending: Question | None = None
     log: list[dict] = field(default_factory=list)
     counter: int = 0
+    edit_tasks: set = field(default_factory=set)              # background chat-message rewrites
 
     skip_tries: int = 0                                       # arrests Skip holds right now
     skip_play_used: int = 0                                   # arrests used while playing (max 1)
-    summary_off: bool = False                                 # Skip guessed the identity: no /summary
+    flipped: bool = False                                     # Skip / Dr. A guessed: past answers reversed
+    vote_enabled: bool = False                                # Artichoke: set at start (5+ players)
     final: tuple | None = None                                # result waiting for Skip's last chance
     skip_used: int = 0
     guessed: dict[int, int] = field(default_factory=dict)     # identities guessed per player

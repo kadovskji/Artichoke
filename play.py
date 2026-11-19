@@ -1,5 +1,6 @@
 """Playing phase: questions, attempts, answers, Agent Skip arrests, Dr. A vote, /hold,
 /summary and round endings."""
+import asyncio
 import math
 import re
 import time
@@ -54,9 +55,10 @@ def _can_ask(g: Game, role: str | None) -> bool:
 
 
 def _can_try(g: Game, role: str | None) -> bool:
+    """Who can try the identity in the group (Skip and Dr. A do it in private)."""
     if g.mode == STARGATE:
         return role in (RESEARCHER, PATIENT)
-    return role in (RESEARCHER, DR_A)
+    return role == RESEARCHER
 
 
 async def _gate(update: Update, g: Game | None) -> bool:
@@ -152,7 +154,7 @@ async def cb_answer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if ans == "u" and g.mode == ARTICHOKE:
         g.moves_used[pend.asker] -= 1           # only in Artichoke "don't know" is free
     g.log.append({"no": g.identity_no, "who": g.name(pend.asker), "kind": "ask",
-                  "text": pend.text, "res": ans})
+                  "text": pend.text, "res": ans, "msg": pend.message_id})
     await cq.answer()
     result = T(g.lang, f"res_{ans}")
     published = T(g.lang, "answered_msg", who=g.name(pend.asker), text=pend.text, answer=result)
@@ -187,14 +189,14 @@ async def answer_expired(ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def try_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     chat, user = update.effective_chat, update.effective_user
     if chat.type == "private":
-        await _agent_private_try(update, ctx)
+        await _secret_try(update, ctx)
         return
     g = games.get(chat.id)
     if not await _gate(update, g):
         return
     role = g.roles.get(user.id)
-    if role == SKIP and g.mode == STARGATE:
-        await dm(ctx, user.id, g, "agent_try_private")
+    if _secret_guesser(g, role):                # Skip / Dr. A try in private
+        await dm(ctx, user.id, g, "secret_try_private")
         return
     if not _can_try(g, role):
         await update.message.reply_text(T(g.lang, "try_forbidden"))
@@ -209,8 +211,8 @@ async def try_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     g.moves_used[user.id] = g.moves_used.get(user.id, 0) + 1
 
     no = g.identity_no
-    if role in (DR_A, PATIENT):
-        correct = False                         # Dr. A and Patient K can never win by guessing
+    if role == PATIENT:
+        correct = False                         # Patient K can never win by guessing
     else:
         hit = await wiki.match_identity({"main": g.identity}, text, wiki_langs(g.lang))
         correct = hit is not None
@@ -239,28 +241,77 @@ async def try_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await check_exhausted(ctx, g)
 
 
-async def _agent_private_try(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Agent Skip tries the identity in private: success disables /summary for the others."""
+def _secret_guesser(g: Game, role: str | None) -> bool:
+    """Agent Skip (Stargate) and Dr. A (Artichoke) don't know the identity: they try it in
+    private, and a correct guess reverses all the answers given so far."""
+    return (g.mode == STARGATE and role == SKIP) or (g.mode == ARTICHOKE and role == DR_A)
+
+
+def shown_result(e: dict) -> str:
+    """The result of a log entry as everybody sees it (yes/no swapped once flipped)."""
+    res = e["res"]
+    if e.get("flip") and res in ("y", "n"):
+        return "n" if res == "y" else "y"
+    return res
+
+
+async def _secret_try(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Skip or Dr. A tries the identity in private (free: it doesn't spend a move, so the
+    moves left in /summary don't give them away)."""
     user = update.effective_user
     g = games.get(user_game.get(user.id))
-    if (not g or g.mode != STARGATE or g.roles.get(user.id) != SKIP
-            or g.phase not in (Phase.PLAYING, Phase.FINAL)):
+    if (not g or not _secret_guesser(g, g.roles.get(user.id))
+            or g.phase not in (Phase.PLAYING, Phase.VOTING, Phase.FINAL)):
         return
     text = " ".join(ctx.args).strip()[:100]
     if not text:
         await update.message.reply_text(T(g.lang, "try_usage"))
         return
-    if g.summary_off:
-        await update.message.reply_text(T(g.lang, "agent_identity_already"))
+    if g.flipped:
+        await update.message.reply_text(T(g.lang, "secret_identity_already"))
         return
     hit = await wiki.match_identity({"main": g.identity}, text, wiki_langs(g.lang))
-    if games.get(g.chat_id) is not g:
+    if games.get(g.chat_id) is not g or g.flipped:
         return
     if hit is None:
-        await update.message.reply_text(T(g.lang, "agent_identity_wrong"))
+        await update.message.reply_text(T(g.lang, "secret_identity_wrong"))
         return
-    g.summary_off = True
-    await update.message.reply_text(T(g.lang, "agent_identity_ok"))
+    g.flipped = True
+    await update.message.reply_text(T(g.lang, "secret_identity_ok"))
+    flip_answers(ctx, g)
+
+
+EDIT_DELAY = 0.5        # seconds between two edits, to stay within Telegram's rate limits
+
+
+def flip_answers(ctx, g: Game) -> None:
+    """Reverse every yes/no answer given so far: in the log (so /summary shows them swapped)
+    and in the messages already posted in the group, rewritten in the background."""
+    todo = []
+    for e in g.log:
+        if e["kind"] == "ask" and e["res"] in ("y", "n"):
+            e["flip"] = True
+            if e.get("msg"):
+                todo.append(e)
+    task = asyncio.create_task(_rewrite_messages(ctx, g, todo))
+    g.edit_tasks.add(task)
+    task.add_done_callback(g.edit_tasks.discard)
+
+
+async def _rewrite_messages(ctx, g: Game, entries: list[dict]) -> None:
+    for e in entries:
+        text = T(g.lang, "answered_msg", who=e["who"], text=e["text"],
+                 answer=T(g.lang, f"res_{shown_result(e)}"))
+        for _ in range(3):
+            try:
+                await ctx.bot.edit_message_text(text, chat_id=g.chat_id, message_id=e["msg"])
+                break
+            except TelegramError as err:
+                wait = getattr(err, "retry_after", None)
+                if wait is None:
+                    break                       # message gone or unchanged: skip it
+                await asyncio.sleep(float(getattr(wait, "total_seconds", lambda: wait)()) + 0.5)
+        await asyncio.sleep(EDIT_DELAY)
 
 
 # ---------------------------------------------------------------- /arrest (Agent Skip)
@@ -353,7 +404,7 @@ async def check_exhausted(ctx, g: Game) -> None:
 
 async def end_without_guess(ctx, g: Game) -> None:
     if g.mode == ARTICHOKE:
-        if len(g.players) >= DR_A_MIN_PLAYERS:
+        if g.vote_enabled:
             await start_vote(ctx, g)
         else:
             await finish_no_winner(ctx, g)
@@ -681,7 +732,7 @@ async def hold_expired(ctx: ContextTypes.DEFAULT_TYPE) -> None:
 def _entry_line(g: Game, i: int, e: dict) -> str:
     icon = "🎯" if e["kind"] == "try" else "❓"
     text = f"«{e['text']}»" if e["kind"] == "try" else e["text"]
-    res = T(g.lang, "res_wrong") if e["res"] == "wrong" else T(g.lang, f"res_{e['res']}")
+    res = T(g.lang, "res_wrong") if e["res"] == "wrong" else T(g.lang, f"res_{shown_result(e)}")
     return f"{i}. {icon} {e['who']}: {text} → {res}"
 
 
@@ -713,9 +764,6 @@ async def summary(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if g.phase not in (Phase.PLAYING, Phase.CHOOSING, Phase.VOTING, Phase.FINAL) \
             or g.identity_no == 0:
         await update.message.reply_text(T(g.lang, "round_not_playing"))
-        return
-    if g.summary_off and update.effective_user.id != g.skip:
-        await update.message.reply_text(T(g.lang, "summary_off"))
         return
     await update.message.reply_text(summary_text(g))
 

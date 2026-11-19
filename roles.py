@@ -90,6 +90,7 @@ async def start_round(ctx, g: Game) -> None:
             return
         _assign_stargate(g, ids, *layout)
     g.moves_used = {u: 0 for u in g.askers()}
+    g.vote_enabled = g.mode == ARTICHOKE and n >= DR_A_MIN_PLAYERS
     g.phase = Phase.CHOOSING
     g.awaiting_identity = True
     LOG.info("round started: chat=%s mode=%s players=%d moves=%d dr_a=%s skip=%s",
@@ -110,7 +111,7 @@ async def start_round(ctx, g: Game) -> None:
         return
 
     if g.mode == ARTICHOKE:
-        extra = T(g.lang, "announce_artichoke_vote") if n >= DR_A_MIN_PLAYERS else ""
+        extra = T(g.lang, "announce_artichoke_vote") if g.vote_enabled else ""
         await say(ctx, g, "announce_artichoke", n=n, k=g.name(g.patient),
                   moves=g.moves, extra=extra)
     else:
@@ -181,8 +182,41 @@ async def begin_play(ctx, g: Game) -> None:
     cancel_job(ctx, "choice", g.chat_id)
     g.phase = Phase.PLAYING
     g.started_at = time.time()
-    if g.dr_a is not None:
-        await dm(ctx, g.dr_a, g, "dm_identity_dra", title=g.identity.title)
     await say(ctx, g, "play_start_artichoke" if g.mode == ARTICHOKE
               else "play_start_stargate", moves=g.moves)
     play.touch_inactivity(ctx, g)
+
+
+# ---------------------------------------------------------------- joining a round in progress
+def late_moves(g: Game) -> int:
+    """Moves for someone joining a round in progress: the average of the moves left to the
+    current players (rounded, at least 1)."""
+    left = [g.moves_left(u) for u in g.askers()]
+    avg = sum(left) / len(left) if left else g.moves
+    return max(1, min(g.moves, int(avg + 0.5)))
+
+
+async def late_join(ctx, g: Game, uid: int, name: str) -> bool:
+    """Add a researcher to a round that has already started. In Stargate the newcomer
+    joins the smallest team. Returns False if they can't be reached in private."""
+    moves = late_moves(g)
+    team = None
+    if g.mode == STARGATE:
+        size = {t: len(g.team_members(t)) for t in g.team_names}
+        smallest = min(size.values())
+        team = random.choice([t for t, n in size.items() if n == smallest])
+        key, kw = "dm_researcher_s", {"team": team, "teams": ", ".join(g.team_names),
+                                      "moves": moves}
+    else:
+        key, kw = "dm_researcher_a", {"k": g.name(g.patient), "moves": moves}
+    if not await dm(ctx, uid, g, key, **kw):
+        return False
+    g.players[uid] = name
+    user_game[uid] = g.chat_id
+    g.roles[uid] = RESEARCHER
+    if team:
+        g.team[uid] = team
+    g.moves_used[uid] = g.moves - moves
+    LOG.info("late join: chat=%s user=%s moves=%d", g.chat_id, uid, moves)
+    await say(ctx, g, "joined_late", name=name, moves=moves, n=len(g.players))
+    return True

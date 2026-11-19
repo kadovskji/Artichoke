@@ -26,7 +26,7 @@ Computed automatically from the number of players (group admins can let the roun
 |:---:|:---:|:---:|
 | 🧠 **Patient K** | 1 player | Secretly picks the identity and answers the questions in public (Yes / No / Don't know) within 5 minutes each. Wins with the first researcher who guesses. |
 | 🔬 **Researchers** | everyone else | Find K's identity. The first to guess wins with K; the other researchers lose. |
-| 🧑‍🔬 **Dr. A** | 1 player, only with 5+ players | Knows the identity and must stay undercover: pretends to investigate and misleads the others (his attempts can never win). Present in 70% of the rounds with 5+ players (always, if the group chooses so in `/settings`). |
+| 🧑‍🔬 **Dr. A** | 1 player, only with 5+ players | Does **not** know the identity and must stay undercover: pretends to investigate and misleads the others. In private chat he can try the identity with `/try <name>` (free): if he guesses it, all the answers given so far are **reversed** (yes ↔ no) in `/summary` and in the group messages. His attempts can never win the round. Present in 70% of the rounds with 5+ players (always, if the group chooses so in `/settings`). |
 
 **End of the round.** The round ends when a researcher guesses, when all researchers are out of moves, or after 10 minutes without activity.
 
@@ -68,7 +68,7 @@ Besides Whistleblower K and Agent Skip, the researchers are split into teams of 
 - `/summary` doesn't show the teams.
 - **Agent Skip's arrests:** Skip starts with 0 and gains one every time a player guesses wrong (K's wrong attempts count too, max 2 at a time). `/arrest` lets Skip pick the player they think is K. While the round is on Skip can use **only 1** arrest; the other one is for the end of the round. Wrong arrests are public (the arrested player is not K).
 - **End of the round:** the round ends when a team names the identity, when all researchers are out of moves, or after 10 minutes without activity. If Skip still has arrests, Skip has 90 seconds to use them. The result is announced after that, unless Skip finds K.
-- **Skip can also** ask questions, and try the identity **in private** with `/try <name>`: if Skip guesses it, `/summary` is disabled for all the other players.
+- **Skip can also** ask questions, and try the identity **in private** with `/try <name>` (free, it spends no move): if Skip guesses it, all the answers given so far are **reversed** (yes ↔ no) in `/summary` and in the group messages. Skip's attempts can never win the round.
 
 **How to win:**
 
@@ -95,6 +95,7 @@ The variant is shown in the sign-up message and saved with the round. Nothing el
 - *Don't know* answers don't cost the asker a move; a wrong attempt costs a move. Attempts are matched ignoring case, spaces, accents and punctuation, and through Wikipedia redirects (so "Dante" matches "Dante Alighieri").
 - Identities are validated on Wikipedia and Wikidata: places, events, works, groups and real animals are refused, and so are disambiguation pages. Write the name as it appears on Wikipedia.
 - If the bot is a group admin with the *Delete messages* permission, it removes messages that reveal the identity.
+- **Joining late**: during a round (before the final vote or the last chance of Agent Skip) `/join` lets a new player in as a researcher. Moves: the average of the moves left to the current players (rounded, at least 1). In Stargate the newcomer joins the smallest team (kept secret). With 4 or fewer players at the start the Artichoke vote stays off, even if somebody joins later.
 - **Pause**: `/hold <minutes>` freezes every timer of the round (max 10 minutes per pause, once per player, 30 minutes in total per round). `/ready` from any player resumes it early. Group admins can disable it or restrict it to admins in `/settings`.
 
 ## Commands
@@ -103,12 +104,12 @@ The variant is shown in the sign-up message and saved with the round. Nothing el
 |---|---|
 | `/start` | Run it once in a private chat with the bot, so it can message you |
 | `/newgame` | Create a round: choose the mode (and the variant, teams and moves if the group allows it) |
-| `/join` | Join the round |
+| `/join` | Join the round; also while it is in progress (see *Joining late*) |
 | `/ready` | Start the round now (any joined player, if there are enough players); during a pause, resume the round |
 | `/wait <minutes>` | Extend the sign-up window (max 10 per use, decimals allowed, e.g. `/wait 3.5`) |
 | `/hold <minutes>` | Pause the round (see above) |
 | `/ask <text>` | Ask a yes/no question (one at a time) |
-| `/try <name>` | Try to name the identity (Agent Skip: in private chat) |
+| `/try <name>` | Try to name the identity (Agent Skip and Dr. A: in private chat) |
 | `/arrest` | Stargate, Agent Skip only: arrest the player you think is Whistleblower K |
 | `/summary` | Questions and answers so far, and moves left (no teams shown) |
 | `/rules` | Receive the rules in private |
