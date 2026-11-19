@@ -14,7 +14,7 @@ import db
 import wiki
 from game import (ANSWER_SECONDS, ARTICHOKE, DR_A, DR_A_MIN_PLAYERS, FINAL_SECONDS,
                   HOLD_MAX_MINUTES, HOLD_TOTAL_SECONDS, INACTIVITY_SECONDS, PATIENT,
-                  RESEARCHER, SKIP, SKIP_MAX_TRIES, STARGATE, VOTE_SECONDS, Game, Phase,
+                  RESEARCHER, SECRET_COOLDOWN, SECRET_MAX_TRIES, SKIP, SKIP_MAX_TRIES, STARGATE, VOTE_SECONDS, Game, Phase,
                   Question, cancel_job, close_game, dm, fmt_duration, games, is_admin, norm,
                   say, schedule, timers, user_game, wiki_langs)
 from i18n import T
@@ -270,11 +270,21 @@ async def _secret_try(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if g.flipped:
         await update.message.reply_text(T(g.lang, "secret_identity_already"))
         return
+    if g.secret_tries >= SECRET_MAX_TRIES:
+        await update.message.reply_text(T(g.lang, "secret_try_none"))
+        return
+    wait = g.secret_last + SECRET_COOLDOWN - time.time()
+    if wait > 0:
+        await update.message.reply_text(T(g.lang, "secret_try_wait", secs=math.ceil(wait)))
+        return
+    g.secret_tries += 1                         # counted (and the clock started) before the check
+    g.secret_last = time.time()
     hit = await wiki.match_identity({"main": g.identity}, text, wiki_langs(g.lang))
     if games.get(g.chat_id) is not g or g.flipped:
         return
     if hit is None:
-        await update.message.reply_text(T(g.lang, "secret_identity_wrong"))
+        await update.message.reply_text(T(g.lang, "secret_identity_wrong",
+                                          left=SECRET_MAX_TRIES - g.secret_tries))
         return
     g.flipped = True
     await update.message.reply_text(T(g.lang, "secret_identity_ok"))

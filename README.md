@@ -26,7 +26,7 @@ Computed automatically from the number of players (group admins can let the roun
 |:---:|:---:|:---:|
 | 🧠 **Patient K** | 1 player | Secretly picks the identity and answers the questions in public (Yes / No / Don't know) within 5 minutes each. Wins with the first researcher who guesses. |
 | 🔬 **Researchers** | everyone else | Find K's identity. The first to guess wins with K; the other researchers lose. |
-| 🧑‍🔬 **Dr. A** | 1 player, only with 5+ players | Does **not** know the identity and must stay undercover: pretends to investigate and misleads the others. In private chat he can try the identity with `/try <name>` (free): if he guesses it, all the answers given so far are **reversed** (yes ↔ no) in `/summary` and in the group messages. His attempts can never win the round. Present in 70% of the rounds with 5+ players (always, if the group chooses so in `/settings`). |
+| 🧑‍🔬 **Dr. A** | 1 player, only with 5+ players | Does **not** know the identity and must stay undercover: pretends to investigate and misleads the others. In private chat he can try the identity with `/try <name>` (free, max 3 attempts, 30 seconds apart): if he guesses it, all the answers given so far are **reversed** (yes ↔ no) in `/summary` and in the group messages. His attempts can never win the round. Present in 70% of the rounds with 5+ players (always, if the group chooses so in `/settings`). |
 
 **End of the round.** The round ends when a researcher guesses, when all researchers are out of moves, or after 10 minutes without activity.
 
@@ -68,7 +68,7 @@ Besides Whistleblower K and Agent Skip, the researchers are split into teams of 
 - `/summary` doesn't show the teams.
 - **Agent Skip's arrests:** Skip starts with 0 and gains one every time a player guesses wrong (K's wrong attempts count too, max 2 at a time). `/arrest` lets Skip pick the player they think is K. While the round is on Skip can use **only 1** arrest; the other one is for the end of the round. Wrong arrests are public (the arrested player is not K).
 - **End of the round:** the round ends when a team names the identity, when all researchers are out of moves, or after 10 minutes without activity. If Skip still has arrests, Skip has 90 seconds to use them. The result is announced after that, unless Skip finds K.
-- **Skip can also** ask questions, and try the identity **in private** with `/try <name>` (free, it spends no move): if Skip guesses it, all the answers given so far are **reversed** (yes ↔ no) in `/summary` and in the group messages. Skip's attempts can never win the round.
+- **Skip can also** ask questions, and try the identity **in private** with `/try <name>` (free, it spends no move; max 3 attempts, 30 seconds apart): if Skip guesses it, all the answers given so far are **reversed** (yes ↔ no) in `/summary` and in the group messages. Skip's attempts can never win the round.
 
 **How to win:**
 

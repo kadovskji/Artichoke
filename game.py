@@ -25,6 +25,8 @@ VARIANTS = {ARTICHOKE: (RANDOM, MUNCHAUSEN),    # Munchausen: the creator is Pat
 
 TEAM_NAMES = ("Grill Flame", "Center Lane", "Sun Streak", "Gondola Wish")
 TEAM_COUNTS = (2, 3, 4)
+SECRET_MAX_TRIES = 3            # private identity guesses of Skip / Dr. A
+SECRET_COOLDOWN = 30            # seconds between two of them
 SKIP_MAX_TRIES = 2              # Stargate: arrests Agent Skip can hold at once
 
 DR_A_MIN_PLAYERS = 5            # Artichoke: Dr. A and the final vote need this many players
@@ -188,6 +190,8 @@ class Game:
 
     skip_tries: int = 0                                       # arrests Skip holds right now
     skip_play_used: int = 0                                   # arrests used while playing (max 1)
+    secret_tries: int = 0                                     # private guesses made by Skip / Dr. A
+    secret_last: float = 0.0                                  # time of the last one
     flipped: bool = False                                     # Skip / Dr. A guessed: past answers reversed
     vote_enabled: bool = False                                # Artichoke: set at start (5+ players)
     final: tuple | None = None                                # result waiting for Skip's last chance
