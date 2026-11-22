@@ -7,13 +7,14 @@ import time
 DB_FILE = os.environ.get("DB_FILE", "artichoke.db")
 LOG = logging.getLogger("artichoke.game")
 
-DEFAULT_SETTINGS = {"lang": "en", "breaks": "on", "attempts": "auto", "dra": "random",
-                    "variants": "off"}
+DEFAULT_SETTINGS = {"lang": "en", "breaks": "on", "attempts": "auto", "dra": "50",
+                    "variants": "off", "dravote": "off"}
 ALLOWED_SETTINGS = {
     "lang": ("en", "it"),
     "breaks": ("on", "admins", "off"),      # who can use /hold
     "attempts": ("auto", "creator"),        # moves per person: computed, or chosen by the creator
-    "dra": ("random", "always"),            # Dr. A: 30% chance of being absent, or always present
+    "dra": ("never", "30", "50", "70", "always"),   # chance of Dr. A being in a round (5+ players)
+    "dravote": ("off", "on"),               # vote on Dr. A when nobody guesses
     "variants": ("off", "on"),              # special (non-random) game variants
 }
 
@@ -34,7 +35,7 @@ CREATE TABLE IF NOT EXISTS rounds (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     chat_id INTEGER, ts INTEGER, mode TEXT,
     players INTEGER, moves_limit INTEGER, moves_total INTEGER, duration INTEGER,
-    outcome TEXT,            -- solved | team_win | skip_win | vote_ok | vote_fail | no_winner
+    outcome TEXT,            -- solved | team_win | skip_win | dra_win | vote_ok | vote_fail | no_winner
     winner_team TEXT,        -- Stargate winning team, if any
     identities TEXT);
 CREATE TABLE IF NOT EXISTS round_players (
@@ -57,10 +58,14 @@ def _add_column(table: str, column: str, ddl: str) -> None:
 # Migrations from older versions
 _add_column("chat_settings", "breaks", "TEXT NOT NULL DEFAULT 'on'")
 _add_column("chat_settings", "attempts", "TEXT NOT NULL DEFAULT 'auto'")
-_add_column("chat_settings", "dra", "TEXT NOT NULL DEFAULT 'random'")
+_add_column("chat_settings", "dra", "TEXT NOT NULL DEFAULT '50'")
+_add_column("chat_settings", "dravote", "TEXT NOT NULL DEFAULT 'off'")
 _add_column("chat_settings", "variants", "TEXT NOT NULL DEFAULT 'off'")
 _add_column("rounds", "variant", "TEXT")
 _add_column("round_players", "solve_moves", "INTEGER")
+_add_column("round_players", "pred_total", "INTEGER")     # Dr. A: names written
+_add_column("round_players", "pred_hits", "INTEGER")      # Dr. A: names the researchers tried
+_db.execute("UPDATE chat_settings SET dra = '50' WHERE dra = 'random'")   # old default
 
 # Rounds played with the old modes (enigma / psyops) follow different rules: drop them.
 _legacy = _db.execute("SELECT COUNT(*) FROM rounds WHERE mode IN ('enigma', 'psyops')").fetchone()[0]
@@ -109,11 +114,14 @@ def has_started(uid: int) -> bool:
 
 # ---------------------------------------------------------------- group settings
 def get_settings(chat_id: int) -> dict:
-    rows = query("SELECT lang, breaks, attempts, dra, variants FROM chat_settings WHERE chat_id = ?",
-                 (chat_id,))
+    rows = query("SELECT lang, breaks, attempts, dra, variants, dravote FROM chat_settings "
+                 "WHERE chat_id = ?", (chat_id,))
     if not rows:
         return dict(DEFAULT_SETTINGS)
-    return dict(zip(("lang", "breaks", "attempts", "dra", "variants"), rows[0]))
+    cfg = dict(zip(("lang", "breaks", "attempts", "dra", "variants", "dravote"), rows[0]))
+    if cfg["dra"] not in ALLOWED_SETTINGS["dra"]:
+        cfg["dra"] = DEFAULT_SETTINGS["dra"]    # e.g. the old "random"
+    return cfg
 
 
 def get_lang(chat_id: int) -> str:
@@ -173,10 +181,12 @@ def record_round(g, outcome: str, winners: set[int], caught: bool,
     rows = [
         (cur.lastrowid, uid, name, g.roles.get(uid), g.team.get(uid),
          int(uid in winners), g.guessed.get(uid, 0),
-         int(caught and uid == g.dr_a), moves[uid], g.solve_moves.get(uid))
+         int(caught and uid == g.dr_a), moves[uid], g.solve_moves.get(uid),
+         len(g.predictions) if uid == g.dr_a else None,
+         len(g.predict_hits) if uid == g.dr_a else None)
         for uid, name in g.players.items()
     ]
     _db.executemany("INSERT INTO round_players "
                     "(round_id, user_id, name, role, team, won, guessed, caught, moves, "
-                    "solve_moves) VALUES (?,?,?,?,?,?,?,?,?,?)", rows)
+                    "solve_moves, pred_total, pred_hits) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", rows)
     _db.commit()

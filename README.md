@@ -26,24 +26,27 @@ Computed automatically from the number of players (group admins can let the roun
 |:---:|:---:|:---:|
 | 🧠 **Patient K** | 1 player | Secretly picks the identity and answers the questions in public (Yes / No / Don't know) within 5 minutes each. Wins with the first researcher who guesses. |
 | 🔬 **Researchers** | everyone else | Find K's identity. The first to guess wins with K; the other researchers lose. |
-| 🧑‍🔬 **Dr. A** | 1 player, only with 5+ players | Does **not** know the identity and must stay undercover: pretends to investigate and misleads the others. In private chat he can try the identity with `/try <name>` (free, max 3 attempts, 30 seconds apart): if he guesses it, all the answers given so far are **reversed** (yes ↔ no) in `/summary` and in the group messages. His attempts can never win the round. Present in 70% of the rounds with 5+ players (always, if the group chooses so in `/settings`). |
+| 🧑‍🔬 **Dr. A** | 1 player, only with 5+ players | Knows the identity and must stay undercover: pretends to investigate and misleads the others (his attempts can never win). Writes his *predictions* (see below). Present in 50% of the rounds with 5+ players by default (never / 30% / 50% / 70% / always in `/settings`). |
+
+**Dr. A's predictions.** As soon as K has chosen the identity, Dr. A receives it in private and writes the names he predicts the researchers will try **wrongly**: one name per researcher, at most 7 (people or characters with a Wikipedia page, different from the identity and from each other), one per message; `/undo` removes the last one. He has 25 seconds per name allowed. In every round where Dr. A may be present the round starts after the same wait, so the wait doesn't give him away.
+
+To win, the researchers must try at least half of the names allowed, rounded up (3 names → 2, 4 → 2, 5 → 3, 6 → 3, 7 → 4). Writing fewer names only makes it harder. If Dr. A writes fewer than needed he can't win: he loses the role and becomes a researcher, everybody is told, K picks a new identity (the old one can't be reused) and there is no vote in that round. Only wrong attempts by researchers count, and each predicted name counts once.
 
 **End of the round.** The round ends when a researcher guesses, when all researchers are out of moves, or after 10 minutes without activity.
 
-**If a researcher guesses**, K and that researcher win together; everyone else loses.
+**If a researcher guesses**, K and that researcher win together; everyone else (Dr. A too) loses.
 
 **If nobody guesses:**
-- **2–4 players:** everybody loses.
-- **5+ players:** everybody votes for 90 seconds to find out who Dr. A is. Secret ballot, no changes, no self-votes; the bot shows the current leader after each vote. The options are:
-  - every other player (if you suspect that player);
-  - *No Dr. A* (if you think there is no Dr. A).
+- if the researchers tried enough of Dr. A's names, **Dr. A wins alone**;
+- otherwise everybody loses, unless the group admins enabled the **Dr. A vote** in `/settings` (off by default).
 
-**To win the vote:**
-- you must have voted for the right option (Dr. A, or *No Dr. A* if he isn't in the game);
-- the right option must get strictly more votes than any other option, so ties don't count;
-- only the players who voted for it win.
+The bot always reveals Dr. A and his predictions at the end.
 
-Otherwise Dr. A (if present) wins alone; if he isn't in the game, nobody wins.  
+**The Dr. A vote (optional).** Everybody votes for 90 seconds to find out who Dr. A is. Secret ballot, no changes, no self-votes; the bot shows the current leader after each vote. The options are:
+- every other player (if you suspect that player);
+- *No Dr. A* (if you think there is no Dr. A).
+
+To win the vote you must have voted for the right option (Dr. A, or *No Dr. A* if he isn't in the game), and the right option must get strictly more votes than any other, so ties don't count. Only the players who voted for it win; otherwise nobody wins.
 
 #
 ### 🕵️ Stargate (`stargatemode`, 4+ players)
@@ -61,7 +64,7 @@ Besides Whistleblower K and Agent Skip, the researchers are split into teams of 
 | Role | Who | Goal |
 |:---:|:---:|:---:|
 | 🔬 **Researchers** | in teams | Name the secret identity. The first team to do it wins together with K. |
-| 🧠 **Whistleblower K** | 1 player, **secret** | Hides among the researchers and picks the only identity of the round. K answers every question **in private** (the bot publishes the answer without saying who gave it). To blend in, K also asks questions and makes attempts: K can answer their own questions only with *Don't know*, and K's attempts are always wrong. K wins with the team that names the identity. |
+| 🧠 **Whistleblower K** | 1 player, **secret** | Hides among the researchers and picks the only identity of the round. K answers every question **in private** (the bot publishes the answer without saying who gave it). To blend in, K also asks questions and makes attempts: K can answer their own questions only with *Don't know*, and K's attempts are always wrong. *Tip:* to avoid being found out right away, K should answer *Don't know* to some valid questions too. K wins with the team that names the identity. |
 | 🕶 **Agent Skip** | 1 player, **known to all** | Find out who Whistleblower K is and arrest them. |
 
 - Everybody (K and Skip too) has the same number of moves, questions and attempts together. In this mode *Don't know* **does cost a move**, for everyone, so that the moves left shown in `/summary` can't give K away.
@@ -109,12 +112,12 @@ The variant is shown in the sign-up message and saved with the round. Nothing el
 | `/wait <minutes>` | Extend the sign-up window (max 10 per use, decimals allowed, e.g. `/wait 3.5`) |
 | `/hold <minutes>` | Pause the round (see above) |
 | `/ask <text>` | Ask a yes/no question (one at a time) |
-| `/try <name>` | Try to name the identity (Agent Skip and Dr. A: in private chat) |
+| `/try <name>` | Try to name the identity (Agent Skip: in private chat) |
 | `/arrest` | Stargate, Agent Skip only: arrest the player you think is Whistleblower K |
 | `/summary` | Questions and answers so far, and moves left (no teams shown) |
 | `/rules` | Receive the rules in private |
-| `/stats` | Group statistics: top winners, most identities guessed, best player per mode, least caught Dr. A, fastest solve, Skip wins |
-| `/mystats` | Your statistics: wins per mode and per role, most played role, identities guessed, fastest solve, times caught as Dr. A (this group, or all groups if used in private) |
+| `/stats` | Group statistics: top winners, most identities guessed, best player per mode, least caught Dr. A, Dr. A who predicted the most attempts, fastest solve, Skip wins |
+| `/mystats` | Your statistics: wins per mode and per role, most played role, identities guessed, fastest solve, times caught and names predicted as Dr. A (this group, or all groups if used in private) |
 | `/settings` | Group settings (group admins): see below |
 | `/stop` | Cancel the round (its creator or a group admin) |
 | `/admin` | **Bot owner only**, private chat only. Not shown in the command menu or in `/rules`: see below |
@@ -128,7 +131,8 @@ Sign-ups last 5 minutes. `/setlan` no longer exists: the language is now in `/se
 | 🌐 Language | English / Italiano | English |
 | ⏸ Allow breaks | Everyone / Admins only / Off | Everyone |
 | 🎯 Attempts | Automatic / Chosen by the creator (5, 7, 10, 15, 20) | Automatic |
-| 🧑‍🔬 Dr. A | 30% chance of absence / Always present (5+ players) | 30% absence |
+| 🧑‍🔬 Dr. A | Never / 30% / 50% / 70% / Always present (5+ players) | 50% |
+| 🗳 Dr. A vote | Off / On (vote to unmask Dr. A when nobody guesses) | Off |
 | 🎭 Special modes | Off / On (enables the Munchausen and Psychosis variants) | Off |
 
 ### Bot administration (`/admin`)
@@ -213,7 +217,7 @@ To update the server by hand: `cd Artichoke && git pull && sudo systemctl restar
 | `artichoke.py` | Entry point: registers commands and handlers |
 | `lobby.py` | `/newgame` (mode, teams, moves buttons), `/join`, `/ready`, `/wait`, `/stop` |
 | `roles.py` | Role assignment, identity selection, start of play |
-| `play.py` | Questions, attempts, Stargate points, Dr. A vote, `/hold`, `/summary`, round endings, spoiler filter |
+| `play.py` | Questions, attempts, Stargate points, Dr. A predictions and vote, `/hold`, `/summary`, round endings, spoiler filter |
 | `settings.py` | `/settings` menu |
 | `admin.py` | `/admin` panel (Update, Restart, Pull, Log) |
 | `logs.py` | Log file setup and reader |

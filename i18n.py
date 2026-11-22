@@ -159,6 +159,18 @@ STRINGS: dict[str, dict[str, str]] = {
     "set_breaks": {"en": "⏸ Allow breaks", "it": "⏸ Consenti pause"},
     "set_attempts": {"en": "🎯 Attempts", "it": "🎯 Tentativi"},
     "set_dra": {"en": "🧑‍🔬 Dr. A", "it": "🧑‍🔬 Dr. A"},
+    "set_dravote": {
+        "en": "🗳 Dr. A vote",
+        "it": "🗳 Voto su Dr. A",
+    },
+    "set_dravote_off": {
+        "en": "Off",
+        "it": "Disattivato",
+    },
+    "set_dravote_on": {
+        "en": "On",
+        "it": "Attivato",
+    },
     "set_variants": {
         "en": "🎭 Special modes",
         "it": "🎭 Modalità speciali",
@@ -178,8 +190,26 @@ STRINGS: dict[str, dict[str, str]] = {
     "set_breaks_off": {"en": "Off", "it": "Disattivate"},
     "set_attempts_auto": {"en": "Automatic", "it": "Automatici"},
     "set_attempts_creator": {"en": "Chosen by the creator", "it": "Scelti da chi crea il round"},
-    "set_dra_random": {"en": "30% chance of absence", "it": "30% di non comparire"},
-    "set_dra_always": {"en": "Always present (5+ players)", "it": "Sempre presente (5+ giocatori)"},
+    "set_dra_always": {
+        "en": "Always present",
+        "it": "Sempre presente",
+    },
+    "set_dra_never": {
+        "en": "Never present",
+        "it": "Mai presente",
+    },
+    "set_dra_30": {
+        "en": "Present in 30% of the rounds",
+        "it": "Presente nel 30% dei round",
+    },
+    "set_dra_50": {
+        "en": "Present in 50% of the rounds",
+        "it": "Presente nel 50% dei round",
+    },
+    "set_dra_70": {
+        "en": "Present in 70% of the rounds",
+        "it": "Presente nel 70% dei round",
+    },
     "settings_sub_lang": {"en": "Choose the language of the group.", "it": "Scegli la lingua del gruppo."},
     "settings_sub_variants": {
         "en": "Lets the round creator pick a variant with a fixed role instead of random roles: Munchausen (Artichoke) and Psychosis (Stargate).",
@@ -194,8 +224,12 @@ STRINGS: dict[str, dict[str, str]] = {
         "it": "Mosse a testa: calcolate in base ai giocatori, oppure scelte (5/7/10/15/20) da chi crea il round.",
     },
     "settings_sub_dra": {
-        "en": "In Artichoke rounds with 5+ players: Dr. A is always there, or has a 30% chance of being absent.",
-        "it": "Nei round Artichoke con 5+ giocatori: il Dr. A c'è sempre, oppure ha il 30% di probabilità di non esserci.",
+        "en": "In Artichoke rounds with 5+ players: how often Dr. A is in the round (never, 30%, 50%, 70% or always).",
+        "it": "Nei round Artichoke con 5+ giocatori: quanto spesso il Dr. A è presente nel round (mai, 30%, 50%, 70% o sempre).",
+    },
+    "settings_sub_dravote": {
+        "en": "If nobody guesses the identity and Dr. A hasn't won with his predictions, everybody votes to unmask Dr. A (or “No Dr. A”). Only in rounds where Dr. A may be present. Off by default: without the vote, everybody just loses.",
+        "it": "Se nessuno indovina l'identità e il Dr. A non ha vinto con le sue previsioni, tutti votano per smascherarlo (oppure «Nessun Dr. A»). Solo nei round in cui il Dr. A può essere presente. Disattivato di default: senza il voto, perdono tutti.",
     },
 
     # ------------------------------------------------------------ round setup
@@ -250,8 +284,8 @@ STRINGS: dict[str, dict[str, str]] = {
         ),
     },
     "dm_patient_s": {
-        "en": "You are the Whistleblower K 🧠, in secret. Send me the name of a famous person or character (real or fictional, with a Wikipedia page): it will be the only identity of the round. You must hide among the researchers: ask questions and make attempts like them (your attempts are always wrong), and answer EVERY question here in private, within 5 minutes. To your own questions you can only answer “Don't know”. You win together with the team that guesses the identity. Teams in play: {teams}. Agent Skip ({skip}) is trying to find out who you are and arrest you!",
-        "it": "Sei il Whistleblower K 🧠, in segreto. Scrivimi il nome di un personaggio famoso (reale o di fantasia, con una pagina su Wikipedia): sarà l'unica identità del round. Devi nasconderti tra i ricercatori: fai domande e tentativi come loro (i tuoi tentativi sono sempre sbagliati) e rispondi a OGNI domanda qui in privato, entro 5 minuti. Alle tue domande puoi rispondere solo «Non lo so». Vinci insieme alla squadra che indovina l'identità. Squadre in gioco: {teams}. L'agente Skip ({skip}) cerca di scoprire chi sei per arrestarti!",
+        "en": "You are the Whistleblower K 🧠, in secret. Send me the name of a famous person or character (real or fictional, with a Wikipedia page): it will be the only identity of the round. You must hide among the researchers: ask questions and make attempts like them (your attempts are always wrong), and answer EVERY question here in private, within 5 minutes. To your own questions you can only answer “Don't know”. Tip: to avoid being found out right away, answer “Don't know” to some valid questions too. You win together with the team that guesses the identity. Teams in play: {teams}. Agent Skip ({skip}) is trying to find out who you are and arrest you!",
+        "it": "Sei il Whistleblower K 🧠, in segreto. Scrivimi il nome di un personaggio famoso (reale o di fantasia, con una pagina su Wikipedia): sarà l'unica identità del round. Devi nasconderti tra i ricercatori: fai domande e tentativi come loro (i tuoi tentativi sono sempre sbagliati) e rispondi a OGNI domanda qui in privato, entro 5 minuti. Alle tue domande puoi rispondere solo «Non lo so». Consiglio: per non farti scoprire subito, rispondi «Non lo so» anche ad alcune domande valide. Vinci insieme alla squadra che indovina l'identità. Squadre in gioco: {teams}. L'agente Skip ({skip}) cerca di scoprire chi sei per arrestarti!",
     },
     "dm_researcher_a": {
         "en": (
@@ -269,20 +303,52 @@ STRINGS: dict[str, dict[str, str]] = {
         "it": "Sei un ricercatore 🔬 della squadra {team}. Squadre in gioco: {teams}. I compagni sono segreti, anche per te. Tra i giocatori si nasconde il Whistleblower K, che conosce l'identità. Usa /ask e /try nel gruppo: hai {moves} mosse, e anche le risposte «Non lo so» costano una mossa. La prima squadra che indovina l'identità vince insieme a K.",
     },
     "dm_dr_a": {
-        "en": (
-            "You are Dr. A 🧑‍🔬, the mad scientist behind Project Artichoke. You do NOT know K's identity. "
-            "Nobody must find out you are involved: pretend to investigate and ask questions to mislead the others. "
-            "You have {moves} moves. In this private chat you can try the identity with /try <name> (it costs no "
-            "move): if you guess it, all the answers given so far are reversed (yes ↔ no) in /summary and in the "
-            "messages in the group. If the others don't unmask you in the final vote, you win alone."
-        ),
-        "it": (
-            "Sei il Dr. A 🧑‍🔬, lo scienziato pazzo dietro il Progetto Artichoke. NON conosci l'identità di K. "
-            "Nessuno deve scoprire che sei coinvolto: fingi di indagare e fai domande per sviare gli altri. "
-            "Hai {moves} mosse. In questa chat privata puoi provare l'identità con /try <nome> (non costa "
-            "mosse): se la indovini, tutte le risposte date finora vengono invertite (sì ↔ no) in /summary e "
-            "nei messaggi del gruppo. Se gli altri non ti smascherano nel voto finale, vinci da solo."
-        ),
+        "en": "You are Dr. A 🧑‍🔬, the mad scientist behind Project Artichoke. Nobody must find out you are involved: pretend to investigate, ask questions and make attempts to mislead the others (your attempts can never win). You have {moves} moves.\n\nAs soon as K chooses the identity you'll receive it here, and you'll write the names you predict the researchers will try WRONGLY (up to {allowed}). You win alone if nobody guesses the identity and the researchers try at least {needed} of your names. With fewer than {needed} names you can't win: you lose the role and K picks another identity.",
+        "it": "Sei il Dr. A 🧑‍🔬, lo scienziato pazzo dietro il Progetto Artichoke. Nessuno deve scoprire che sei coinvolto: fingi di indagare, fai domande e tentativi per sviare gli altri (i tuoi tentativi non possono mai vincere). Hai {moves} mosse.\n\nAppena K sceglie l'identità la riceverai qui, e scriverai i nomi che prevedi i ricercatori tenteranno SBAGLIANDO (fino a {allowed}). Vinci da solo se nessuno indovina l'identità e i ricercatori tentano almeno {needed} dei tuoi nomi. Con meno di {needed} nomi non puoi vincere: perdi il ruolo e K sceglie un'altra identità.",
+    },
+    "dm_predict": {
+        "en": "🤫 K's identity is: {title}\n\n🔮 Now write the names you predict the researchers will try wrongly: one per message, up to {allowed} (famous people or characters with a Wikipedia page, different from the identity). The researchers must try at least {needed} of them (each name counts once) for you to win, so you need to write at least {needed}. /undo removes the last one. You have {secs} seconds: when they are over the round starts, for everybody.",
+        "it": "🤫 L'identità di K è: {title}\n\n🔮 Ora scrivi i nomi che prevedi i ricercatori tenteranno sbagliando: uno per messaggio, fino a {allowed} (personaggi famosi con una pagina su Wikipedia, diversi dall'identità). I ricercatori devono tentarne almeno {needed} (ogni nome conta una volta) perché tu vinca, quindi ne devi scrivere almeno {needed}. /undo toglie l'ultimo. Hai {secs} secondi: allo scadere il round parte, per tutti.",
+    },
+    "predict_wait": {
+        "en": "⏳ The identity is set. The round is about to begin…",
+        "it": "⏳ L'identità è stata scelta. Il round sta per iniziare…",
+    },
+    "predict_saved": {
+        "en": "✅ Saved: {title} ({n}/{allowed}). To be able to win you need at least {needed} names.",
+        "it": "✅ Salvato: {title} ({n}/{allowed}). Per poter vincere servono almeno {needed} nomi.",
+    },
+    "predict_full": {
+        "en": "You have already written all the names allowed.",
+        "it": "Hai già scritto tutti i nomi consentiti.",
+    },
+    "predict_dup": {
+        "en": "You already wrote that name.",
+        "it": "Hai già scritto questo nome.",
+    },
+    "predict_is_identity": {
+        "en": "That is the real identity: it can't be one of your predictions.",
+        "it": "Questa è l'identità vera: non può essere una tua previsione.",
+    },
+    "predict_none": {
+        "en": "You have no names to remove.",
+        "it": "Non hai nomi da togliere.",
+    },
+    "predict_undone": {
+        "en": "↩️ Removed: {title} ({n}/{allowed}).",
+        "it": "↩️ Tolto: {title} ({n}/{allowed}).",
+    },
+    "dra_dropped": {
+        "en": "🔮 The mad scientist (Dr. A) didn't complete his plan in time: the role is cancelled for this round, and there will be no Dr. A vote. K must choose a new identity.",
+        "it": "🔮 Lo scienziato pazzo (Dr. A) non ha completato il suo piano in tempo: il ruolo è annullato per questo round e non ci sarà nessun voto su Dr. A. K deve scegliere una nuova identità.",
+    },
+    "dm_choose_again": {
+        "en": "Dr. A didn't prepare his plan in time, so the role is cancelled. Send me a NEW identity (the previous one can't be used again).",
+        "it": "Il Dr. A non ha preparato il piano in tempo, quindi il ruolo è annullato. Scrivimi una NUOVA identità (la precedente non si può riusare).",
+    },
+    "dm_dra_dropped": {
+        "en": "⌛ You didn't write enough names in time: you lose the Dr. A role and now play as a researcher. K will choose a new identity, which you don't know.",
+        "it": "⌛ Non hai scritto abbastanza nomi in tempo: perdi il ruolo di Dr. A e ora giochi come ricercatore. K sceglierà una nuova identità, che non conosci.",
     },
     "dm_skip": {
         "en": "You are Agent Skip 🕶, a CIA subject in a remote-viewing study, known to all. Your goal: find out who the Whistleblower K is, hiding among the players, and arrest them. You can follow the questions (and ask yours: {moves} moves). You start with 0 arrests and gain one every time a player guesses wrong (up to 2). While the round is on you can make only 1 arrest, with /arrest; the other one is for the end of the round (you have 90 seconds). You win ALONE by arresting K. In this private chat you can also try the identity with /try <name> (it costs no move; max 3 attempts, 30 seconds apart): if you guess it, all the answers given so far are reversed (yes ↔ no) in /summary and in the messages in the group.",
@@ -514,6 +580,10 @@ STRINGS: dict[str, dict[str, str]] = {
 
     # ------------------------------------------------------------ endings
     "reveal_dr_a": {"en": "\n🧑‍🔬 Dr. A was {name}.", "it": "\n🧑‍🔬 Il Dr. A era {name}."},
+    "reveal_predictions": {
+        "en": "\n🔮 Dr. A's predictions: {names} → tried {hits}/{total} (needed {needed}).",
+        "it": "\n🔮 Previsioni del Dr. A: {names} → tentati {hits}/{total} (ne servivano {needed}).",
+    },
     "reveal_patient": {
         "en": "\n🧠 Whistleblower K was {name}.",
         "it": "\n🧠 Il Whistleblower K era {name}.",
@@ -535,6 +605,10 @@ STRINGS: dict[str, dict[str, str]] = {
     "no_winner_artichoke": {
         "en": "🏁 Nobody found the identity: {title}. No winner.",
         "it": "🏁 Nessuno ha scoperto l'identità: {title}. Nessun vincitore.",
+    },
+    "dra_win": {
+        "en": "😈 Nobody found the identity ({title}), and the researchers tried {hits} of the {total} names predicted by Dr. A. Dr. A was {a} and wins alone!",
+        "it": "😈 Nessuno ha scoperto l'identità ({title}) e i ricercatori hanno tentato {hits} dei {total} nomi previsti dal Dr. A. Il Dr. A era {a} e vince da solo!",
     },
     "no_winner_stargate": {
         "en": "🏁 Round over: nobody named the identity ({ids}). No winner.",
@@ -571,8 +645,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "it": "✅ Non c'era nessun Dr. A, e avete indovinato! Vincitori: {winners}.\nIdentità: {title}\nVoti: {tally}",
     },
     "vote_fail_dra": {
-        "en": "😈 Dr. A was {a} and got away with it! Dr. A wins alone.\nIdentity: {title}\nVotes: {tally}",
-        "it": "😈 Il Dr. A era {a} e l'ha fatta franca! Vince il Dr. A da solo.\nIdentità: {title}\nVoti: {tally}",
+        "en": "😈 Dr. A was {a} and escaped the vote. Nobody wins.\nIdentity: {title}\nVotes: {tally}",
+        "it": "😈 Il Dr. A era {a} e l'ha fatta franca nel voto. Non vince nessuno.\nIdentità: {title}\nVoti: {tally}",
     },
     "vote_fail_none": {
         "en": "❌ There was no Dr. A, and the vote went wrong. Nobody wins.\nIdentity: {title}\nVotes: {tally}",
@@ -601,6 +675,14 @@ STRINGS: dict[str, dict[str, str]] = {
         "en": "🧑‍🔬 Least caught Dr. A: not enough data yet (min. {min} games)",
         "it": "🧑‍🔬 Dr. A scoperto meno volte: dati insufficienti (min. {min} partite)",
     },
+    "stats_dra_pred": {
+        "en": "🔮 Dr. A who predicted the most attempts: {name}, {h} names tried out of {t} written ({n} rounds)",
+        "it": "🔮 Dr. A che ha previsto più tentativi: {name}, {h} nomi tentati su {t} scritti ({n} round)",
+    },
+    "stats_dra_pred_none": {
+        "en": "🔮 Dr. A who predicted the most attempts: no data yet",
+        "it": "🔮 Dr. A che ha previsto più tentativi: ancora nessun dato",
+    },
     "stats_fastest": {
         "en": "⚡ Fastest solve: {name}, {moves} moves",
         "it": "⚡ Soluzione più rapida: {name}, {moves} mosse",
@@ -620,6 +702,10 @@ STRINGS: dict[str, dict[str, str]] = {
     "my_guessed": {"en": "Identities guessed: {n}", "it": "Identità indovinate: {n}"},
     "my_fastest": {"en": "Fastest solve: {moves} moves", "it": "Soluzione più rapida: {moves} mosse"},
     "my_caught": {"en": "Caught as Dr. A: {c} of {n}", "it": "Scoperto come Dr. A: {c} su {n}"},
+    "my_pred": {
+        "en": "Names predicted as Dr. A: {h} tried out of {t}",
+        "it": "Nomi previsti come Dr. A: {h} tentati su {t}",
+    },
 
     # ------------------------------------------------------------ /rules
     "rules_sent": {
@@ -631,11 +717,11 @@ STRINGS: dict[str, dict[str, str]] = {
         "it": "📖 Artichoke: come funziona\n\nIndovina un'identità famosa (una persona reale o di fantasia, una divinità…) facendo domande sì/no. Ogni modalità è ispirata a un programma psicologico segreto della Guerra Fredda.\n\nModalità: Artichoke (2+ giocatori) e Stargate (4+ giocatori).\n\nSvolgimento:\n• /newgame: chi lo scrive sceglie la modalità e le opzioni.\n• /join: chiunque voglia giocare (deve aver premuto /start nella mia chat privata).\n• Il round parte allo scadere dei 5 minuti di iscrizioni, o prima con /ready (qualsiasi giocatore iscritto, se ci sono abbastanza giocatori). /wait <minuti> prolunga le iscrizioni (max 10 per volta, anche decimali).\n\nMosse: ogni giocatore ha lo stesso numero di mosse (domande + tentativi), deciso dal numero di giocatori: 2 → 25 · 3 → 15 · 4-6 → 10 · 7-8 → 7 · 9-15 → 5 · 16+ → 3 (gli admin possono far scegliere a chi crea il round).\n\nUnirsi in ritardo: mentre un round è in corso (prima del voto finale), /join fa entrare un nuovo giocatore come ricercatore. Mosse: la media di quelle rimaste ai giocatori attuali (arrotondata, almeno 1). In Stargate entra nella squadra più piccola.\n\nPausa: /hold <minuti> ferma il round (max 10 minuti, una volta a testa per round, 30 minuti in totale); /ready lo riprende. Gli admin del gruppo possono disattivarla o limitarla agli admin in /settings.\n\nComandi: /ask <testo> · /try <nome> · /arrest (Stargate, agente Skip) · /summary · /hold · /stats · /mystats · /rules · /stop · /settings",
     },
     "rules_artichokemode": {
-        "en": "🧪 Artichoke: rules\n\nInspired by Project Artichoke, the CIA experiments on interrogation and amnesia. 2+ players.\n\nROLES (drawn at random)\n• 🧠 Patient K (1 player): an amnesiac who secretly picks a famous identity (with a Wikipedia page) and answers the researchers' questions in public (Yes / No / Don't know) within 5 minutes each.\n• 🔬 Researchers (everyone else): try to work out K's identity.\n• 🧑‍🔬 Dr. A (only with 5+ players, present in 70% of the rounds by default): the mad scientist. Does NOT know the identity and must stay undercover: pretends to investigate and misleads the others. In private chat with the bot he can try the identity with /try <name> (it costs no move; max 3 attempts, 30 seconds apart): if he guesses it, all the answers given so far are reversed (yes ↔ no) in /summary and in the group messages. His attempts can never win the round.\n\nMOVES\n• Everyone has the same number of moves, questions and attempts together: 2 players 25 · 3 players 15 each · 4-6 players 10 each · 7-8 players 7 each · 9-15 players 5 each · 16+ players 3 each (group admins can let the creator choose in /settings).\n• /ask asks a yes/no question, one at a time. “Don't know” doesn't cost a move.\n• /try makes an attempt. A wrong attempt costs a move.\n\nEND OF THE ROUND\nThe round ends when a researcher guesses, when all researchers are out of moves, or after 10 minutes without activity.\n\nIf a researcher guesses\n• K and that researcher win together; everyone else loses.\n\nIf nobody guesses\n• 2-4 players: everybody loses.\n• 5+ players: everybody votes for 90 seconds to find out who Dr. A is. Secret ballot, no changes, no self-votes; the bot shows the current leader after each vote. The options are:\n   – every other player (if you suspect that player);\n   – No Dr. A (if you think there is no Dr. A).\n\nTo win the vote\n• You must have voted for the right option: Dr. A, or “No Dr. A” if he isn't in the game.\n• The right option must get strictly more votes than any other option, so ties don't count.\n• Only the players who voted for it win.\n\nOtherwise Dr. A (if present) wins alone; if he isn't in the game, nobody wins.\n\nSPECIAL VARIANT (if the group admins enabled it in /settings)\n🩺 Munchausen: whoever started the round is automatically Patient K. All the other roles are drawn at random. Roles are announced as usual.",
-        "it": "🧪 Artichoke: regole\n\nIspirata al Progetto Artichoke, gli esperimenti della CIA su interrogatori e amnesia. 2+ giocatori.\n\nRUOLI (estratti a caso)\n• 🧠 Paziente K (1 giocatore): un amnesico che sceglie in segreto un'identità famosa (con una pagina su Wikipedia) e risponde pubblicamente alle domande dei ricercatori (Sì / No / Non lo so) entro 5 minuti ciascuna.\n• 🔬 Ricercatori (tutti gli altri): cercano di scoprire l'identità di K.\n• 🧑‍🔬 Dr. A (solo con 5+ giocatori, presente nel 70% dei round di default): lo scienziato pazzo. NON conosce l'identità e deve restare nell'ombra: finge di indagare e svia gli altri. Nella chat privata con il bot può provare l'identità con /try <nome> (non costa mosse; massimo 3 tentativi, a 30 secondi l'uno dall'altro): se la indovina, tutte le risposte date finora vengono invertite (sì ↔ no) in /summary e nei messaggi del gruppo. I suoi tentativi non possono mai far vincere il round.\n\nMOSSE\n• Tutti hanno lo stesso numero di mosse, domande e tentativi insieme: 2 giocatori 25 · 3 giocatori 15 a testa · 4-6 giocatori 10 a testa · 7-8 giocatori 7 a testa · 9-15 giocatori 5 a testa · 16+ giocatori 3 a testa (gli admin possono far scegliere a chi crea il round in /settings).\n• /ask fa una domanda sì/no, una alla volta. «Non lo so» non costa una mossa.\n• /try fa un tentativo. Un tentativo sbagliato costa una mossa.\n\nFINE DEL ROUND\nIl round finisce quando un ricercatore indovina, quando tutti i ricercatori hanno finito le mosse, o dopo 10 minuti di inattività.\n\nSe un ricercatore indovina\n• K e quel ricercatore vincono insieme; tutti gli altri perdono.\n\nSe nessuno indovina\n• 2-4 giocatori: perdono tutti.\n• 5+ giocatori: tutti votano per 90 secondi per scoprire chi è il Dr. A. Voto segreto, non modificabile, non per se stessi; il bot mostra chi è in testa dopo ogni voto. Le opzioni sono:\n   – ogni altro giocatore (se sospetti quel giocatore);\n   – Nessun Dr. A (se pensi che non ci sia).\n\nPer vincere il voto\n• Devi aver votato l'opzione giusta: il Dr. A, oppure «Nessun Dr. A» se non è in gioco.\n• L'opzione giusta deve avere strettamente più voti di ogni altra, quindi i pareggi non contano.\n• Vincono solo i giocatori che l'hanno votata.\n\nAltrimenti vince il Dr. A (se presente) da solo; se non è in gioco non vince nessuno.\n\nVARIANTE SPECIALE (se gli admin del gruppo l'hanno attivata in /settings)\n🩺 Munchausen: chi ha avviato il round è automaticamente il Paziente K. Tutti gli altri ruoli sono estratti a caso. I ruoli sono annunciati come sempre.",
+        "en": "🧪 Artichoke: rules\n\nInspired by Project Artichoke, the CIA experiments on interrogation and amnesia. 2+ players.\n\nROLES (drawn at random)\n• 🧠 Patient K (1 player): an amnesiac who secretly picks a famous identity (with a Wikipedia page) and answers the researchers' questions in public (Yes / No / Don't know) within 5 minutes each.\n• 🔬 Researchers (everyone else): try to work out K's identity.\n• 🧑‍🔬 Dr. A (only with 5+ players; present in 50% of the rounds by default, group admins can change it in /settings): the mad scientist. Knows the identity and must stay undercover: pretends to investigate and misleads the others (his attempts can never win).\n\nMOVES\n• Everyone has the same number of moves, questions and attempts together: 2 players 25 · 3 players 15 each · 4-6 players 10 each · 7-8 players 7 each · 9-15 players 5 each · 16+ players 3 each (group admins can let the creator choose in /settings).\n• /ask asks a yes/no question, one at a time. “Don't know” doesn't cost a move.\n• /try makes an attempt. A wrong attempt costs a move.\n\nDR. A'S PREDICTIONS\n• As soon as K has chosen the identity, Dr. A receives it in private and writes the names he predicts the researchers will try wrongly: one name per researcher, at most 7 (famous people or characters with a Wikipedia page, different from the identity and from each other). He has 25 seconds per name allowed.\n• In every round where Dr. A may be present the round starts after the same wait, so the wait doesn't give him away.\n• To win, the researchers must try at least half of the names allowed, rounded up: 3 names → 2 · 4 → 2 · 5 → 3 · 6 → 3 · 7 → 4. Dr. A can write fewer names, but then he can't reach that number: if he writes fewer than needed he loses the role, becomes a researcher, everybody is told, K picks a new identity (the old one can't be reused) and there is no vote in that round.\n\nEND OF THE ROUND\nThe round ends when a researcher guesses, when all researchers are out of moves, or after 10 minutes without activity.\n\nIf a researcher guesses\n• K and that researcher win together; everyone else (Dr. A too) loses.\n\nIf nobody guesses\n• If the researchers tried at least the needed number of Dr. A's names (wrong attempts by researchers only, each name counts once), Dr. A wins alone.\n• Otherwise everybody loses, unless the group admins enabled the Dr. A vote in /settings (off by default): then everybody votes, see below.\n• At the end the bot reveals Dr. A and his predictions.\n\nTHE DR. A VOTE (optional)\nEverybody votes for 90 seconds to find out who Dr. A is. Secret ballot, no changes, no self-votes; the bot shows the current leader after each vote. The options are:\n   – every other player (if you suspect that player);\n   – No Dr. A (if you think there is no Dr. A).\n• You must have voted for the right option: Dr. A, or “No Dr. A” if he isn't in the game.\n• The right option must get strictly more votes than any other option, so ties don't count.\n• Only the players who voted for it win. Otherwise nobody wins.\n\nSPECIAL VARIANT (if the group admins enabled it in /settings)\n🩺 Munchausen: whoever started the round is automatically Patient K. All the other roles are drawn at random. Roles are announced as usual.",
+        "it": "🧪 Artichoke: regole\n\nIspirata al Progetto Artichoke, gli esperimenti della CIA su interrogatori e amnesia. 2+ giocatori.\n\nRUOLI (estratti a caso)\n• 🧠 Paziente K (1 giocatore): un amnesico che sceglie in segreto un'identità famosa (con una pagina su Wikipedia) e risponde pubblicamente alle domande dei ricercatori (Sì / No / Non lo so) entro 5 minuti ciascuna.\n• 🔬 Ricercatori (tutti gli altri): cercano di scoprire l'identità di K.\n• 🧑‍🔬 Dr. A (solo con 5+ giocatori; presente nel 50% dei round di default, gli admin del gruppo possono cambiarlo in /settings): lo scienziato pazzo. Conosce l'identità e deve restare nell'ombra: finge di indagare e svia gli altri (i suoi tentativi non possono mai vincere).\n\nMOSSE\n• Tutti hanno lo stesso numero di mosse, domande e tentativi insieme: 2 giocatori 25 · 3 giocatori 15 a testa · 4-6 giocatori 10 a testa · 7-8 giocatori 7 a testa · 9-15 giocatori 5 a testa · 16+ giocatori 3 a testa (gli admin possono far scegliere a chi crea il round in /settings).\n• /ask fa una domanda sì/no, una alla volta. «Non lo so» non costa una mossa.\n• /try fa un tentativo. Un tentativo sbagliato costa una mossa.\n\nLE PREVISIONI DEL DR. A\n• Appena K ha scelto l'identità, il Dr. A la riceve in privato e scrive i nomi che prevede i ricercatori tenteranno sbagliando: un nome per ricercatore, al massimo 7 (personaggi famosi con una pagina su Wikipedia, diversi dall'identità e tra loro). Ha 25 secondi per ogni nome consentito.\n• In ogni round in cui il Dr. A può essere presente, il round parte dopo la stessa attesa, così l'attesa non lo tradisce.\n• Per vincere i ricercatori devono aver tentato almeno metà dei nomi consentiti, arrotondata per eccesso: 3 nomi → 2 · 4 → 2 · 5 → 3 · 6 → 3 · 7 → 4. Il Dr. A può scrivere meno nomi, ma così non raggiunge quel numero: se ne scrive meno del necessario perde il ruolo, diventa un ricercatore, tutti vengono avvisati, K sceglie una nuova identità (la vecchia non si può riusare) e in quel round non c'è il voto.\n\nFINE DEL ROUND\nIl round finisce quando un ricercatore indovina, quando tutti i ricercatori hanno finito le mosse, o dopo 10 minuti di inattività.\n\nSe un ricercatore indovina\n• K e quel ricercatore vincono insieme; tutti gli altri (anche il Dr. A) perdono.\n\nSe nessuno indovina\n• Se i ricercatori hanno tentato almeno il numero necessario di nomi del Dr. A (solo tentativi sbagliati dei ricercatori, ogni nome conta una volta), il Dr. A vince da solo.\n• Altrimenti perdono tutti, a meno che gli admin del gruppo abbiano attivato il voto su Dr. A in /settings (disattivato di default): allora si vota, vedi sotto.\n• Alla fine il bot rivela il Dr. A e le sue previsioni.\n\nIL VOTO SU DR. A (facoltativo)\nTutti votano per 90 secondi per scoprire chi è il Dr. A. Voto segreto, non modificabile, non per se stessi; il bot mostra chi è in testa dopo ogni voto. Le opzioni sono:\n   – ogni altro giocatore (se sospetti quel giocatore);\n   – Nessun Dr. A (se pensi che non ci sia).\n• Devi aver votato l'opzione giusta: il Dr. A, oppure «Nessun Dr. A» se non è in gioco.\n• L'opzione giusta deve avere strettamente più voti di ogni altra, quindi i pareggi non contano.\n• Vincono solo i giocatori che l'hanno votata. Altrimenti non vince nessuno.\n\nVARIANTE SPECIALE (se gli admin del gruppo l'hanno attivata in /settings)\n🩺 Munchausen: chi ha avviato il round è automaticamente il Paziente K. Tutti gli altri ruoli sono estratti a caso. I ruoli sono annunciati come sempre.",
     },
     "rules_stargatemode": {
-        "en": "🕵️ Stargate: rules\n\nInspired by the Stargate Project, the CIA remote-viewing program. 4+ players, with 2 to 4 teams chosen by the creator.\n\nSETUP\n• Minimum players: 2 teams → 4 · 3 teams → 8 · 4 teams → 10.\n• Besides the Whistleblower K and Agent Skip, the researchers are split into teams of the SAME size: at least 2 researchers per team (1 is enough with two teams). If the players can't be split evenly, the bot says which numbers of players work and the round doesn't start.\n• Teams get random names among Grill Flame, Center Lane, Sun Streak and Gondola Wish. Everyone knows the teams in play and their own team, but not their teammates.\n\nROLES\n• 🔬 Researchers: find the secret identity with their team.\n• 🧠 Whistleblower K: SECRET. Hides among the researchers, knows the only identity of the round (chosen by K) and answers every question in private; the bot publishes the answers without saying who gave them. K also asks questions and makes attempts to blend in: K can answer their own questions only with “Don't know”, and K's attempts are always wrong.\n• 🕶 Agent Skip: KNOWN to all. Must find out who the Whistleblower K is and arrest them.\n\nMOVES\n• Everyone (K and Agent Skip too) has the same number of moves, questions and attempts together, decided by the number of players (see the general rules).\n• In this mode “Don't know” DOES cost a move, for everyone, so that the moves left (shown in /summary) don't give K away.\n• /ask asks a question, one at a time; /try makes an attempt.\n\nAGENT SKIP\n• Starts with 0 arrests and gains one every time a player guesses wrong (max 2).\n• /arrest: pick the player you think is K. While the round is on you can make only 1 arrest; the other one is for the end of the round, when you have 90 seconds.\n• Wrong arrests are public: the arrested player is not K.\n• Skip can also ask questions. In private chat with the bot Skip can try the identity with /try <name> (it costs no move; max 3 attempts, 30 seconds apart): if Skip guesses it, all the answers given so far are reversed (yes ↔ no) in /summary and in the group messages. Skip's attempts can never win the round.\n\nEND OF THE ROUND\nThe round ends when a team names the identity, when all researchers are out of moves, or after 10 minutes without activity. Then Skip has 90 seconds to use the remaining arrests.\n\nHOW TO WIN\n• The first team that names the identity wins together with K.\n• Agent Skip wins ALONE (everyone else loses) by arresting K, even at the end of the round.\n• If nobody names the identity and Skip doesn't arrest K, nobody wins.\n\nSPECIAL VARIANT (if the group admins enabled it in /settings)\n🌀 Psychosis: whoever started the round is automatically Agent Skip. All the other roles are drawn at random.",
-        "it": "🕵️ Stargate: regole\n\nIspirata al Progetto Stargate, il programma CIA di remote viewing. 4+ giocatori, con 2-4 squadre scelte da chi crea il round.\n\nPREPARAZIONE\n• Giocatori minimi: 2 squadre → 4 · 3 squadre → 8 · 4 squadre → 10.\n• Oltre al Whistleblower K e all'agente Skip, i ricercatori sono divisi in squadre della STESSA dimensione: almeno 2 ricercatori per squadra (ne basta 1 con due squadre). Se i giocatori non si dividono in modo uguale, il bot dice quali numeri di giocatori vanno bene e il round non parte.\n• Le squadre hanno nomi estratti a caso tra Grill Flame, Center Lane, Sun Streak e Gondola Wish. Tutti conoscono le squadre in gioco e la propria, ma non i compagni.\n\nRUOLI\n• 🔬 Ricercatori: scoprono l'identità segreta con la propria squadra.\n• 🧠 Whistleblower K: SEGRETO. Si nasconde tra i ricercatori, conosce l'unica identità del round (scelta da K) e risponde a ogni domanda in privato; il bot pubblica le risposte senza dire chi le ha date. K fa anche domande e tentativi per mimetizzarsi: alle proprie domande può rispondere solo «Non lo so» e i suoi tentativi sono sempre sbagliati.\n• 🕶 Agente Skip: NOTO a tutti. Deve scoprire chi è il Whistleblower K e arrestarlo.\n\nMOSSE\n• Tutti (anche K e l'agente Skip) hanno lo stesso numero di mosse, domande e tentativi insieme, deciso dal numero di giocatori (vedi le regole generali).\n• In questa modalità «Non lo so» COSTA una mossa, per tutti, così le mosse rimaste (mostrate in /summary) non rivelano K.\n• /ask fa una domanda, una alla volta; /try fa un tentativo.\n\nAGENTE SKIP\n• Inizia con 0 arresti e ne guadagna uno ogni volta che un giocatore sbaglia un tentativo (max 2).\n• /arrest: scegli il giocatore che pensi sia K. Durante il round puoi fare un solo arresto; l'altro è per la fine del round, quando hai 90 secondi.\n• Gli arresti sbagliati sono pubblici: il giocatore arrestato non è K.\n• Skip può fare anche domande. Nella chat privata con il bot può provare l'identità con /try <nome> (non costa mosse; massimo 3 tentativi, a 30 secondi l'uno dall'altro): se la indovina, tutte le risposte date finora vengono invertite (sì ↔ no) in /summary e nei messaggi del gruppo. I tentativi di Skip non possono mai far vincere il round.\n\nFINE DEL ROUND\nIl round finisce quando una squadra nomina l'identità, quando tutti i ricercatori hanno finito le mosse, o dopo 10 minuti di inattività. Poi Skip ha 90 secondi per usare gli arresti rimasti.\n\nCOME SI VINCE\n• La prima squadra che nomina l'identità vince insieme a K.\n• L'agente Skip vince DA SOLO (tutti gli altri perdono) arrestando K, anche a fine round.\n• Se nessuno nomina l'identità e Skip non arresta K, non vince nessuno.\n\nVARIANTE SPECIALE (se gli admin del gruppo l'hanno attivata in /settings)\n🌀 Psychosis: chi ha avviato il round è automaticamente l'agente Skip. Tutti gli altri ruoli sono estratti a caso.",
+        "en": "🕵️ Stargate: rules\n\nInspired by the Stargate Project, the CIA remote-viewing program. 4+ players, with 2 to 4 teams chosen by the creator.\n\nSETUP\n• Minimum players: 2 teams → 4 · 3 teams → 8 · 4 teams → 10.\n• Besides the Whistleblower K and Agent Skip, the researchers are split into teams of the SAME size: at least 2 researchers per team (1 is enough with two teams). If the players can't be split evenly, the bot says which numbers of players work and the round doesn't start.\n• Teams get random names among Grill Flame, Center Lane, Sun Streak and Gondola Wish. Everyone knows the teams in play and their own team, but not their teammates.\n\nROLES\n• 🔬 Researchers: find the secret identity with their team.\n• 🧠 Whistleblower K: SECRET. Hides among the researchers, knows the only identity of the round (chosen by K) and answers every question in private; the bot publishes the answers without saying who gave them. K also asks questions and makes attempts to blend in: K can answer their own questions only with “Don't know”, and K's attempts are always wrong. Tip: to avoid being found out right away, K should answer “Don't know” to some valid questions too.\n• 🕶 Agent Skip: KNOWN to all. Must find out who the Whistleblower K is and arrest them.\n\nMOVES\n• Everyone (K and Agent Skip too) has the same number of moves, questions and attempts together, decided by the number of players (see the general rules).\n• In this mode “Don't know” DOES cost a move, for everyone, so that the moves left (shown in /summary) don't give K away.\n• /ask asks a question, one at a time; /try makes an attempt.\n\nAGENT SKIP\n• Starts with 0 arrests and gains one every time a player guesses wrong (max 2).\n• /arrest: pick the player you think is K. While the round is on you can make only 1 arrest; the other one is for the end of the round, when you have 90 seconds.\n• Wrong arrests are public: the arrested player is not K.\n• Skip can also ask questions. In private chat with the bot Skip can try the identity with /try <name> (it costs no move; max 3 attempts, 30 seconds apart): if Skip guesses it, all the answers given so far are reversed (yes ↔ no) in /summary and in the group messages. Skip's attempts can never win the round.\n\nEND OF THE ROUND\nThe round ends when a team names the identity, when all researchers are out of moves, or after 10 minutes without activity. Then Skip has 90 seconds to use the remaining arrests.\n\nHOW TO WIN\n• The first team that names the identity wins together with K.\n• Agent Skip wins ALONE (everyone else loses) by arresting K, even at the end of the round.\n• If nobody names the identity and Skip doesn't arrest K, nobody wins.\n\nSPECIAL VARIANT (if the group admins enabled it in /settings)\n🌀 Psychosis: whoever started the round is automatically Agent Skip. All the other roles are drawn at random.",
+        "it": "🕵️ Stargate: regole\n\nIspirata al Progetto Stargate, il programma CIA di remote viewing. 4+ giocatori, con 2-4 squadre scelte da chi crea il round.\n\nPREPARAZIONE\n• Giocatori minimi: 2 squadre → 4 · 3 squadre → 8 · 4 squadre → 10.\n• Oltre al Whistleblower K e all'agente Skip, i ricercatori sono divisi in squadre della STESSA dimensione: almeno 2 ricercatori per squadra (ne basta 1 con due squadre). Se i giocatori non si dividono in modo uguale, il bot dice quali numeri di giocatori vanno bene e il round non parte.\n• Le squadre hanno nomi estratti a caso tra Grill Flame, Center Lane, Sun Streak e Gondola Wish. Tutti conoscono le squadre in gioco e la propria, ma non i compagni.\n\nRUOLI\n• 🔬 Ricercatori: scoprono l'identità segreta con la propria squadra.\n• 🧠 Whistleblower K: SEGRETO. Si nasconde tra i ricercatori, conosce l'unica identità del round (scelta da K) e risponde a ogni domanda in privato; il bot pubblica le risposte senza dire chi le ha date. K fa anche domande e tentativi per mimetizzarsi: alle proprie domande può rispondere solo «Non lo so» e i suoi tentativi sono sempre sbagliati. Consiglio: per non farsi scoprire subito, K dovrebbe rispondere «Non lo so» anche ad alcune domande valide.\n• 🕶 Agente Skip: NOTO a tutti. Deve scoprire chi è il Whistleblower K e arrestarlo.\n\nMOSSE\n• Tutti (anche K e l'agente Skip) hanno lo stesso numero di mosse, domande e tentativi insieme, deciso dal numero di giocatori (vedi le regole generali).\n• In questa modalità «Non lo so» COSTA una mossa, per tutti, così le mosse rimaste (mostrate in /summary) non rivelano K.\n• /ask fa una domanda, una alla volta; /try fa un tentativo.\n\nAGENTE SKIP\n• Inizia con 0 arresti e ne guadagna uno ogni volta che un giocatore sbaglia un tentativo (max 2).\n• /arrest: scegli il giocatore che pensi sia K. Durante il round puoi fare un solo arresto; l'altro è per la fine del round, quando hai 90 secondi.\n• Gli arresti sbagliati sono pubblici: il giocatore arrestato non è K.\n• Skip può fare anche domande. Nella chat privata con il bot può provare l'identità con /try <nome> (non costa mosse; massimo 3 tentativi, a 30 secondi l'uno dall'altro): se la indovina, tutte le risposte date finora vengono invertite (sì ↔ no) in /summary e nei messaggi del gruppo. I tentativi di Skip non possono mai far vincere il round.\n\nFINE DEL ROUND\nIl round finisce quando una squadra nomina l'identità, quando tutti i ricercatori hanno finito le mosse, o dopo 10 minuti di inattività. Poi Skip ha 90 secondi per usare gli arresti rimasti.\n\nCOME SI VINCE\n• La prima squadra che nomina l'identità vince insieme a K.\n• L'agente Skip vince DA SOLO (tutti gli altri perdono) arrestando K, anche a fine round.\n• Se nessuno nomina l'identità e Skip non arresta K, non vince nessuno.\n\nVARIANTE SPECIALE (se gli admin del gruppo l'hanno attivata in /settings)\n🌀 Psychosis: chi ha avviato il round è automaticamente l'agente Skip. Tutti gli altri ruoli sono estratti a caso.",
     },
 }

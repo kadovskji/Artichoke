@@ -102,6 +102,8 @@ async def private_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Private text: the bot admin composing an announcement, or K sending an identity."""
     if await admin.handle_text(update, ctx):
         return
+    if await roles.on_prediction(update, ctx):
+        return
     await roles.on_identity(update, ctx)
 
 
@@ -132,6 +134,7 @@ def main() -> None:
     command("stats", stats.stats)
     command("mystats", stats.mystats)
     app.add_handler(CommandHandler("admin", admin.admin, filters=filters.ChatType.PRIVATE))
+    app.add_handler(CommandHandler("undo", roles.undo_prediction, filters=filters.ChatType.PRIVATE))
 
     app.add_handler(CallbackQueryHandler(lobby.cb_mode, pattern=r"^m:"))
     app.add_handler(CallbackQueryHandler(lobby.cb_variant, pattern=r"^r:"))

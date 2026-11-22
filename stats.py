@@ -72,6 +72,16 @@ async def stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     else:
         lines.append(T(lang, "stats_dra_none", min=MIN_DR_A_GAMES))
 
+    pred = db.query(
+        f"SELECT {_NAME}, SUM(rp.pred_hits) AS h, SUM(rp.pred_total) AS t, COUNT(*) {_BASE} "
+        "AND rp.role = 'dr_a' AND rp.pred_total > 0 GROUP BY rp.user_id "
+        "HAVING h > 0 ORDER BY h DESC, t ASC, rp.user_id LIMIT 1", cid)
+    if pred:
+        lines.append(T(lang, "stats_dra_pred", name=pred[0][0], h=pred[0][1], t=pred[0][2],
+                       n=pred[0][3]))
+    else:
+        lines.append(T(lang, "stats_dra_pred_none"))
+
     fast = db.query(
         f"SELECT COALESCE(u.name, rp.name), rp.solve_moves {_BASE} "
         "AND rp.solve_moves IS NOT NULL AND rp.role != 'skip' "
@@ -127,4 +137,8 @@ async def mystats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         lines.append(T(lang, "my_fastest", moves=fastest))
     if dra_n:
         lines.append(T(lang, "my_caught", c=dra_c, n=dra_n))
+        ph, pt = db.query(
+            f"SELECT COALESCE(SUM(rp.pred_hits), 0), COALESCE(SUM(rp.pred_total), 0) {base} "
+            "AND rp.role = 'dr_a'", params)[0]
+        lines.append(T(lang, "my_pred", h=ph, t=pt))
     await update.message.reply_text("\n".join(lines))

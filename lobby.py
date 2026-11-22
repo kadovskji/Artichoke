@@ -211,7 +211,7 @@ async def join(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if g and g.phase in CONFIG_PHASES:
         await update.message.reply_text(T(lang, "join_wait_config"))
         return
-    late = bool(g) and g.phase in (Phase.CHOOSING, Phase.PLAYING)
+    late = bool(g) and g.phase in (Phase.CHOOSING, Phase.PREDICT, Phase.PLAYING)
     if g and g.phase in (Phase.VOTING, Phase.FINAL):
         await update.message.reply_text(T(g.lang, "join_late_closed"))
         return

@@ -30,7 +30,9 @@ SECRET_COOLDOWN = 30            # seconds between two of them
 SKIP_MAX_TRIES = 2              # Stargate: arrests Agent Skip can hold at once
 
 DR_A_MIN_PLAYERS = 5            # Artichoke: Dr. A and the final vote need this many players
-DR_A_ABSENT_CHANCE = 0.3        # default setting: Dr. A is absent in 30% of the rounds
+DR_A_PRESENCE = {"never": 0.0, "30": 0.3, "50": 0.5, "70": 0.7, "always": 1.0}  # /settings
+PREDICT_MAX = 7                 # max names Dr. A can predict
+PREDICT_SECONDS_PER_NAME = 25   # time to write them: this many seconds per allowed name
 
 MOVE_OPTIONS = (5, 7, 10, 15, 20)   # moves per person when the round creator chooses them
 
@@ -57,6 +59,7 @@ class Phase(Enum):
     MOVES = auto()      # creator picks the moves per person (if the group allows it)
     LOBBY = auto()      # sign-ups
     CHOOSING = auto()   # K chooses an identity
+    PREDICT = auto()    # Artichoke: Dr. A writes his predictions (same wait in every round)
     PLAYING = auto()
     VOTING = auto()     # Artichoke: vote to unmask Dr. A
     FINAL = auto()      # Stargate: round over, Agent Skip may still arrest K
@@ -68,6 +71,12 @@ def min_players(mode: str, teams: int = 2) -> int:
     if mode == ARTICHOKE:
         return 2
     return {2: 4, 3: 8, 4: 10}.get(teams, 4)
+
+
+def predict_needed(allowed: int) -> int:
+    """Predicted names the researchers must try for Dr. A to win: half of the allowed ones,
+    rounded up (fixed at the start, whatever number of names Dr. A actually writes)."""
+    return (allowed + 1) // 2
 
 
 def auto_moves(n_players: int) -> int:
@@ -193,7 +202,12 @@ class Game:
     secret_tries: int = 0                                     # private guesses made by Skip / Dr. A
     secret_last: float = 0.0                                  # time of the last one
     flipped: bool = False                                     # Skip / Dr. A guessed: past answers reversed
-    vote_enabled: bool = False                                # Artichoke: set at start (5+ players)
+    vote_enabled: bool = False                                # Artichoke: vote on Dr. A if nobody guesses
+    dra_possible: bool = False                                # Artichoke: Dr. A may be in the round
+    predict_allowed: int = 0                                  # names Dr. A may write
+    predictions: list[Identity] = field(default_factory=list) # names written by Dr. A
+    predict_hits: set[int] = field(default_factory=set)       # indexes tried by the researchers
+    burnt: list[Identity] = field(default_factory=list)       # identity dropped with Dr. A
     final: tuple | None = None                                # result waiting for Skip's last chance
     skip_used: int = 0
     guessed: dict[int, int] = field(default_factory=dict)     # identities guessed per player
@@ -281,7 +295,8 @@ def close_game(ctx, g: Game, reason: str = "closed") -> None:
     for (cid, kind, key) in list(timers):
         if cid == g.chat_id:
             cancel_job(ctx, kind, cid, key)
-    for kind in ("config", "lobby", "choice", "inactivity", "answer", "vote", "hold", "final"):
+    for kind in ("config", "lobby", "choice", "predict", "inactivity", "answer", "vote", "hold",
+                 "final"):
         cancel_job(ctx, kind, g.chat_id)
     for uid in g.players:
         user_game.pop(uid, None)

@@ -12,14 +12,15 @@ from telegram.ext import ContextTypes
 
 import db
 import wiki
-from game import (ANSWER_SECONDS, ARTICHOKE, DR_A, DR_A_MIN_PLAYERS, FINAL_SECONDS,
+from game import (ANSWER_SECONDS, ARTICHOKE, DR_A, FINAL_SECONDS,
                   HOLD_MAX_MINUTES, HOLD_TOTAL_SECONDS, INACTIVITY_SECONDS, PATIENT,
                   RESEARCHER, SECRET_COOLDOWN, SECRET_MAX_TRIES, SKIP, SKIP_MAX_TRIES, STARGATE, VOTE_SECONDS, Game, Phase,
-                  Question, cancel_job, close_game, dm, fmt_duration, games, is_admin, norm,
-                  say, schedule, timers, user_game, wiki_langs)
+                  Question, cancel_job, close_game, compact, dm, fmt_duration, games,
+                  is_admin, norm, predict_needed, say, schedule, timers, user_game,
+                  wiki_langs)
 from i18n import T
 
-ACTIVE = (Phase.CHOOSING, Phase.PLAYING)
+ACTIVE = (Phase.CHOOSING, Phase.PREDICT, Phase.PLAYING)
 
 
 def _lang(chat_id: int) -> str:
@@ -55,10 +56,10 @@ def _can_ask(g: Game, role: str | None) -> bool:
 
 
 def _can_try(g: Game, role: str | None) -> bool:
-    """Who can try the identity in the group (Skip and Dr. A do it in private)."""
+    """Who can try the identity in the group (Agent Skip does it in private)."""
     if g.mode == STARGATE:
         return role in (RESEARCHER, PATIENT)
-    return role == RESEARCHER
+    return role in (RESEARCHER, DR_A)
 
 
 async def _gate(update: Update, g: Game | None) -> bool:
@@ -211,8 +212,8 @@ async def try_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     g.moves_used[user.id] = g.moves_used.get(user.id, 0) + 1
 
     no = g.identity_no
-    if role == PATIENT:
-        correct = False                         # Patient K can never win by guessing
+    if role in (DR_A, PATIENT):
+        correct = False                         # Dr. A and Patient K can never win by guessing
     else:
         hit = await wiki.match_identity({"main": g.identity}, text, wiki_langs(g.lang))
         correct = hit is not None
@@ -229,6 +230,10 @@ async def try_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     g.log.append({"no": no, "who": g.name(user.id), "kind": "try", "text": text,
                   "res": "wrong"})
+    if role == RESEARCHER and g.predictions:    # did a researcher try a name Dr. A predicted?
+        await _count_prediction(g, text)
+        if games.get(chat.id) is not g or g.phase != Phase.PLAYING or g.identity_no != no:
+            return
     await update.message.reply_text(T(
         g.lang, "try_wrong", who=g.name(user.id), text=text, left=g.moves_left(user.id)))
     # Every wrong attempt (K's too, so K can't be told apart) gives Agent Skip an arrest
@@ -242,9 +247,9 @@ async def try_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 def _secret_guesser(g: Game, role: str | None) -> bool:
-    """Agent Skip (Stargate) and Dr. A (Artichoke) don't know the identity: they try it in
-    private, and a correct guess reverses all the answers given so far."""
-    return (g.mode == STARGATE and role == SKIP) or (g.mode == ARTICHOKE and role == DR_A)
+    """Agent Skip doesn't know the identity: Skip tries it in private, and a correct guess
+    reverses all the answers given so far."""
+    return g.mode == STARGATE and role == SKIP
 
 
 def shown_result(e: dict) -> str:
@@ -255,9 +260,30 @@ def shown_result(e: dict) -> str:
     return res
 
 
+async def _count_prediction(g: Game, text: str) -> None:
+    """A researcher made a wrong attempt: if it is one of Dr. A's predicted names (matched
+    like an identity, redirects included), book it. Each name counts once."""
+    pending = [i for i in range(len(g.predictions)) if i not in g.predict_hits]
+    guess = compact(text)
+    for i in pending:
+        if guess in g.predictions[i].accepted:
+            g.predict_hits.add(i)
+            return
+    if not pending:
+        return
+    found = await wiki.verify_wikipedia(text, wiki_langs(g.lang))
+    if found is None:
+        return
+    resolved = compact(found[0])
+    for i in pending:
+        if resolved in g.predictions[i].accepted:
+            g.predict_hits.add(i)
+            return
+
+
 async def _secret_try(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Skip or Dr. A tries the identity in private (free: it doesn't spend a move, so the
-    moves left in /summary don't give them away)."""
+    """Agent Skip tries the identity in private (free: it doesn't spend a move, so the
+    moves left in /summary don't give Skip away)."""
     user = update.effective_user
     g = games.get(user_game.get(user.id))
     if (not g or not _secret_guesser(g, g.roles.get(user.id))
@@ -414,7 +440,9 @@ async def check_exhausted(ctx, g: Game) -> None:
 
 async def end_without_guess(ctx, g: Game) -> None:
     if g.mode == ARTICHOKE:
-        if g.vote_enabled:
+        if g.dr_a is not None and len(g.predict_hits) >= predict_needed(g.predict_allowed):
+            await finish_dra_win(ctx, g)        # the researchers tried enough of his names
+        elif g.vote_enabled:
             await start_vote(ctx, g)
         else:
             await finish_no_winner(ctx, g)
@@ -534,23 +562,32 @@ async def finish_vote(ctx, g: Game) -> None:
                      title=title, tally=tally)
         else:
             text = T(g.lang, "vote_ok_none", winners=names, title=title, tally=tally)
-        await _finish(ctx, g, "vote_ok", winners, text, caught=g.dr_a is not None)
+        await _finish(ctx, g, "vote_ok", winners, text + predictions_text(g),
+                      caught=g.dr_a is not None)
     else:
         if g.dr_a is not None:
             text = T(g.lang, "vote_fail_dra", a=g.name(g.dr_a), title=title, tally=tally)
-            winners = {g.dr_a}
         else:
             text = T(g.lang, "vote_fail_none", title=title, tally=tally)
-            winners = set()
-        await _finish(ctx, g, "vote_fail", winners, text)
+        await _finish(ctx, g, "vote_fail", set(), text + predictions_text(g))
 
 
 # ---------------------------------------------------------------- endings
+def predictions_text(g: Game) -> str:
+    """Dr. A's predicted names, with the ones the researchers tried."""
+    if not g.predictions:
+        return ""
+    names = ", ".join(f"{p.title} {'✅' if i in g.predict_hits else '❌'}"
+                      for i, p in enumerate(g.predictions))
+    return T(g.lang, "reveal_predictions", names=names, hits=len(g.predict_hits),
+             total=len(g.predictions), needed=predict_needed(g.predict_allowed))
+
+
 def reveal(g: Game) -> str:
     """Secret roles, shown when the round is over."""
     out = ""
     if g.dr_a is not None:
-        out += T(g.lang, "reveal_dr_a", name=g.name(g.dr_a))
+        out += T(g.lang, "reveal_dr_a", name=g.name(g.dr_a)) + predictions_text(g)
     if g.mode == STARGATE:
         out += T(g.lang, "reveal_patient", name=g.name(g.patient))
         for t in g.team_names:
@@ -595,6 +632,13 @@ async def finish_solved(ctx, g: Game, guesser: int) -> None:
     text = T(g.lang, "solved_artichoke", guesser=g.name(guesser), title=g.identity.title,
              k=g.name(g.patient))
     await _finish(ctx, g, "solved", {g.patient, guesser}, text + reveal(g))
+
+
+async def finish_dra_win(ctx, g: Game) -> None:
+    """Artichoke: nobody guessed, and the researchers tried enough of Dr. A's names."""
+    text = T(g.lang, "dra_win", a=g.name(g.dr_a), title=g.identity.title,
+             hits=len(g.predict_hits), total=len(g.predictions))
+    await _finish(ctx, g, "dra_win", {g.dr_a}, text + reveal(g))
 
 
 async def finish_skip_win(ctx, g: Game) -> None:
@@ -783,7 +827,8 @@ async def spoiler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Delete group messages that reveal the current identity."""
     msg = update.effective_message
     g = games.get(update.effective_chat.id)
-    if not g or g.phase not in (Phase.PLAYING, Phase.VOTING, Phase.FINAL) or not msg or not msg.text:
+    if (not g or g.phase not in (Phase.PREDICT, Phase.PLAYING, Phase.VOTING, Phase.FINAL)
+            or not msg or not msg.text):
         return
     words = g.all_spoilers()
     if not words:
