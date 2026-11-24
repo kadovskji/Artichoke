@@ -33,6 +33,7 @@ DR_A_MIN_PLAYERS = 5            # Artichoke: Dr. A and the final vote need this 
 DR_A_PRESENCE = {"never": 0.0, "30": 0.3, "50": 0.5, "70": 0.7, "always": 1.0}  # /settings
 PREDICT_MAX = 7                 # max names Dr. A can predict
 PREDICT_SECONDS_PER_NAME = 25   # time to write them: this many seconds per allowed name
+PREDICT_REMINDERS = (30, 15)    # reminders in the group: seconds left before the questions open
 
 MOVE_OPTIONS = (5, 7, 10, 15, 20)   # moves per person when the round creator chooses them
 

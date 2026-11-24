@@ -11,7 +11,7 @@ import db
 import play
 import wiki
 from game import (ARTICHOKE, CHOICE_SECONDS, DR_A, DR_A_MIN_PLAYERS, DR_A_PRESENCE,
-                  MUNCHAUSEN, PATIENT, PREDICT_MAX, PREDICT_SECONDS_PER_NAME, PSYCHOSIS,
+                  MUNCHAUSEN, PATIENT, PREDICT_MAX, PREDICT_REMINDERS, PREDICT_SECONDS_PER_NAME, PSYCHOSIS,
                   RESEARCHER, SKIP, STARGATE, TEAM_NAMES,
                   Game, Phase, auto_moves, predict_needed,
                   cancel_job, close_game, dm, games, make_identity, say, schedule,
@@ -193,11 +193,15 @@ async def begin_play(ctx, g: Game) -> None:
 async def start_predict(ctx, g: Game) -> None:
     g.phase = Phase.PREDICT
     secs = PREDICT_SECONDS_PER_NAME * g.predict_allowed
-    await say(ctx, g, "predict_wait")
+    await say(ctx, g, "predict_wait", secs=secs)
     if g.dr_a is not None:
         await dm(ctx, g.dr_a, g, "dm_predict", title=g.identity.title, allowed=g.predict_allowed,
                  needed=predict_needed(g.predict_allowed), secs=secs)
     schedule(ctx, predict_expired, secs, "predict", g.chat_id)
+    for left in PREDICT_REMINDERS:                      # "30 / 15 seconds left" for everybody
+        if secs > left:
+            schedule(ctx, predict_reminder, secs - left, "predict_note", g.chat_id,
+                     key=str(left), data=left)
 
 
 async def start_playing(ctx, g: Game) -> None:
@@ -305,6 +309,12 @@ async def undo_prediction(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     gone = g.predictions.pop()
     await update.message.reply_text(T(g.lang, "predict_undone", title=gone.title,
                                       n=len(g.predictions), allowed=g.predict_allowed))
+
+
+async def predict_reminder(ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    g = games.get(ctx.job.chat_id)
+    if g and g.phase == Phase.PREDICT:
+        await say(ctx, g, "predict_left", secs=ctx.job.data)
 
 
 async def predict_expired(ctx: ContextTypes.DEFAULT_TYPE) -> None:
