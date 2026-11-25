@@ -53,7 +53,7 @@ EXPLICIT = ExplicitCommand()
 COMMANDS = [
     ("newgame", "Create a new round", "Crea un nuovo round"),
     ("join", "Join the round", "Unisciti al round"),
-    ("nextgame", "Sign up for the next round (again: cancel)", "Iscriviti al prossimo round (di nuovo: annulla)"),
+    ("nextgame", "Get notified when the next round opens (again: cancel)", "Ricevi un avviso all'apertura del prossimo round (di nuovo: annulla)"),
     ("ready", "Start the round now / resume after a pause", "Avvia subito / riprendi dopo la pausa"),
     ("wait", "Extend sign-ups: /wait <minutes>", "Prolunga le iscrizioni: /wait <minuti>"),
     ("hold", "Pause the round: /hold <minutes>", "Pausa il round: /hold <minuti>"),

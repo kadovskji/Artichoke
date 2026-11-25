@@ -9,7 +9,7 @@ import db
 import play
 import roles
 from game import (ARTICHOKE, CONFIG_SECONDS, LOBBY_SECONDS, MOVE_OPTIONS, NEXTGAME_HOURS, RANDOM,
-                  STARGATE, VARIANTS, dm, say,
+                  STARGATE, VARIANTS, dm,
                   TEAM_COUNTS, WAIT_MAX_MINUTES, Game, Phase, cancel_job, close_game,
                   fmt_duration, games, is_admin, min_players, schedule, stargate_layout,
                   user_game, valid_totals)
@@ -108,28 +108,21 @@ async def _open_lobby(ctx, q, g: Game) -> None:
     g.lobby_end = time.time() + LOBBY_SECONDS
     schedule(ctx, lobby_expired, LOBBY_SECONDS, "lobby", g.chat_id)
     await q.edit_message_text(lobby_text(g))
-    await _add_preregistered(ctx, g)
+    await _notify_preregistered(ctx, g)
 
 
-async def _add_preregistered(ctx, g: Game) -> None:
-    """The lobby is open: sign up the players who used /nextgame, and tell each in private."""
-    added = []
-    for uid, name in db.nextgame_take(g.chat_id, NEXTGAME_HOURS * 3600):
-        if uid in g.players:
-            continue
-        if uid in user_game:                    # busy in another round: skip, but tell them
-            await dm(ctx, uid, g, "nextgame_busy", chat=db.chat_title(g.chat_id))
-            continue
-        g.players[uid] = name
-        user_game[uid] = g.chat_id
-        added.append(name)
-        await dm(ctx, uid, g, "nextgame_dm", chat=db.chat_title(g.chat_id), mode=mode_name(g))
-    if added:
-        await say(ctx, g, "nextgame_added", names=", ".join(added), n=len(g.players))
+async def _notify_preregistered(ctx, g: Game) -> None:
+    """The lobby is open: tell in private the users who asked for it with /nextgame.
+    They are not signed up: they still have to /join."""
+    for uid, _name in db.nextgame_take(g.chat_id, NEXTGAME_HOURS * 3600):
+        if uid not in g.players:
+            await dm(ctx, uid, g, "nextgame_dm", chat=db.chat_title(g.chat_id),
+                     mode=mode_name(g), minutes=LOBBY_SECONDS // 60)
 
 
 async def nextgame(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """/nextgame: pre-register for the next round created in this group (again: cancel)."""
+    """/nextgame: get a private notification when the next round opens in this group
+    (again: cancel). It doesn't sign you up."""
     chat, user = update.effective_chat, update.effective_user
     lang = db.get_lang(chat.id)
     if chat.type == "private":
