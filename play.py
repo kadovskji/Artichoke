@@ -98,34 +98,85 @@ async def ask(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(T(g.lang, "no_moves"))
         return
 
+    await _post_question(ctx, g, user.id, text)
+
+
+async def _post_question(ctx, g: Game, uid: int, text: str) -> None:
+    """Publish a question and start waiting for K's answer."""
     # the move is spent now (Artichoke refunds it on "don't know", Stargate never does)
-    g.moves_used[user.id] = g.moves_used.get(user.id, 0) + 1
+    g.moves_used[uid] = g.moves_used.get(uid, 0) + 1
     g.counter += 1
-    q = Question(g.counter, user.id, text)
+    q = Question(g.counter, uid, text)
     g.pending = q
     if g.mode == ARTICHOKE:
         msg = await ctx.bot.send_message(
-            chat.id,
-            T(g.lang, "question_msg", who=g.name(user.id), used=g.moves_used[user.id],
+            g.chat_id,
+            T(g.lang, "question_msg", who=g.name(uid), used=g.moves_used[uid],
               limit=g.moves, text=text, patient=g.name(g.patient)),
             reply_markup=_kb_answer(g, q))
         q.message_id = msg.message_id
     else:
         # Stargate: K is secret, so K answers in private and the bot publishes the answer
         msg = await ctx.bot.send_message(
-            chat.id,
-            T(g.lang, "question_msg_s", who=g.name(user.id), used=g.moves_used[user.id],
+            g.chat_id,
+            T(g.lang, "question_msg_s", who=g.name(uid), used=g.moves_used[uid],
               limit=g.moves, text=text))
         q.message_id = msg.message_id
-        own = user.id == g.patient
+        own = uid == g.patient
         copy = await ctx.bot.send_message(
             g.patient,
             T(g.lang, "dm_question_own" if own else "dm_question",
-              who=g.name(user.id), text=text),
+              who=g.name(uid), text=text),
             reply_markup=_kb_answer(g, q, only_unknown=own))
         q.dm_message_id = copy.message_id
-    schedule(ctx, answer_expired, ANSWER_SECONDS, "answer", chat.id, data=q.id)
+    schedule(ctx, answer_expired, ANSWER_SECONDS, "answer", g.chat_id, data=q.id)
     touch_inactivity(ctx, g)
+
+
+async def asknext(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """/asknext <question>: queue a question, asked automatically when the current one is
+    answered (one queued question per player; without text it removes yours). With no
+    question waiting it works like /ask."""
+    chat, user = update.effective_chat, update.effective_user
+    if chat.type == "private":
+        return
+    g = games.get(chat.id)
+    if not await _gate(update, g):
+        return
+    if not _can_ask(g, g.roles.get(user.id)):
+        await update.message.reply_text(T(g.lang, "ask_forbidden"))
+        return
+    text = " ".join(ctx.args).strip()[:200]
+    mine = [i for i, (u, _) in enumerate(g.queue) if u == user.id]
+    if not text:
+        if mine:
+            g.queue.pop(mine[0])
+            await update.message.reply_text(T(g.lang, "queue_removed", name=g.name(user.id)))
+        else:
+            await update.message.reply_text(T(g.lang, "asknext_usage"))
+        return
+    if mine:
+        await update.message.reply_text(T(g.lang, "queue_already"))
+        return
+    if g.moves_left(user.id) <= 0:
+        await update.message.reply_text(T(g.lang, "no_moves"))
+        return
+    g.queue.append((user.id, text))
+    if g.pending:
+        await update.message.reply_text(T(g.lang, "queue_added", name=g.name(user.id),
+                                          pos=len(g.queue)))
+    else:
+        await _ask_next(ctx, g)                 # nothing waiting: ask right away
+
+
+async def _ask_next(ctx, g: Game) -> None:
+    """Post the next queued question whose author can still ask."""
+    while g.queue and not g.pending and g.phase == Phase.PLAYING:
+        uid, text = g.queue.pop(0)
+        if g.moves_left(uid) <= 0 or not _can_ask(g, g.roles.get(uid)):
+            await say(ctx, g, "queue_skipped", who=g.name(uid))
+            continue
+        await _post_question(ctx, g, uid, text)
 
 
 async def cb_answer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -169,6 +220,7 @@ async def cb_answer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         except TelegramError:
             pass
     touch_inactivity(ctx, g)
+    await _ask_next(ctx, g)                     # the next queued question, if any
     await check_exhausted(ctx, g)
 
 
@@ -803,6 +855,9 @@ def summary_text(g: Game) -> str:
         else:
             lines.append(T(g.lang, "summary_pending_s", who=g.name(g.pending.asker),
                            text=g.pending.text))
+    if g.queue:
+        lines.append(T(g.lang, "summary_queue", items="; ".join(
+            f"{g.name(u)}: {t}" for u, t in g.queue)))
     lines.append("")
     lines.append(T(g.lang, "summary_moves", moves=" · ".join(
         f"{g.name(u)} {g.moves_left(u)}" for u in g.askers())))

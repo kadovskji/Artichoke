@@ -195,6 +195,7 @@ class Game:
     moves_used: dict[int, int] = field(default_factory=dict)  # for the current identity
     total_moves: dict[int, int] = field(default_factory=dict) # of the identities already played
     pending: Question | None = None
+    queue: list = field(default_factory=list)                 # /asknext: [(user_id, text)]
     log: list[dict] = field(default_factory=list)
     counter: int = 0
     edit_tasks: set = field(default_factory=set)              # background chat-message rewrites

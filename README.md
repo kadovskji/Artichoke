@@ -114,6 +114,7 @@ The variant is shown in the sign-up message and saved with the round. Nothing el
 | `/wait <minutes>` | Extend the sign-up window (max 10 per use, decimals allowed, e.g. `/wait 3.5`) |
 | `/hold <minutes>` | Pause the round (see above) |
 | `/ask <text>` | Ask a yes/no question (one at a time) |
+| `/asknext <text>` | Queue a question: it is asked as soon as the current one is answered (one per player; alone, it removes yours). It costs a move only when it is asked; if you have none left by then, it is skipped |
 | `/try <name>` | Try to name the identity (Agent Skip: in private chat) |
 | `/arrest` | Stargate, Agent Skip only: arrest the player you think is Whistleblower K |
 | `/summary` | Questions and answers so far, and moves left (no teams shown) |

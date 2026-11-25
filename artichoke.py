@@ -58,6 +58,7 @@ COMMANDS = [
     ("wait", "Extend sign-ups: /wait <minutes>", "Prolunga le iscrizioni: /wait <minuti>"),
     ("hold", "Pause the round: /hold <minutes>", "Pausa il round: /hold <minuti>"),
     ("ask", "Ask a yes/no question", "Fai una domanda sì/no"),
+    ("asknext", "Queue a question for after the current one", "Metti in coda una domanda"),
     ("try", "Try to name the identity", "Prova a indovinare l'identità"),
     ("arrest", "Stargate: Agent Skip arrests K", "Stargate: l'agente Skip arresta K"),
     ("summary", "Questions and answers so far", "Domande e risposte finora"),
@@ -128,6 +129,7 @@ def main() -> None:
     command("stop", lobby.stop)
     command("hold", play.hold)
     command("ask", play.ask)
+    command("asknext", play.asknext)
     command("try", play.try_cmd)
     command("arrest", play.arrest)
     command("summary", play.summary)
