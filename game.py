@@ -31,6 +31,7 @@ SKIP_MAX_TRIES = 2              # Stargate: arrests Agent Skip can hold at once
 
 DR_A_MIN_PLAYERS = 5            # Artichoke: Dr. A and the final vote need this many players
 DR_A_PRESENCE = {"never": 0.0, "30": 0.3, "50": 0.5, "70": 0.7, "always": 1.0}  # /settings
+NEXTGAME_HOURS = 24            # /nextgame pre-registrations expire after this long
 PREDICT_MAX = 7                 # max names Dr. A can predict
 PREDICT_SECONDS_PER_NAME = 25   # time to write them: this many seconds per allowed name
 PREDICT_REMINDERS = (30, 15)    # reminders in the group: seconds left before the questions open

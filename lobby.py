@@ -8,8 +8,8 @@ from telegram.ext import ContextTypes
 import db
 import play
 import roles
-from game import (ARTICHOKE, CONFIG_SECONDS, LOBBY_SECONDS, MOVE_OPTIONS, RANDOM, STARGATE,
-                  VARIANTS,
+from game import (ARTICHOKE, CONFIG_SECONDS, LOBBY_SECONDS, MOVE_OPTIONS, NEXTGAME_HOURS, RANDOM,
+                  STARGATE, VARIANTS, dm, say,
                   TEAM_COUNTS, WAIT_MAX_MINUTES, Game, Phase, cancel_job, close_game,
                   fmt_duration, games, is_admin, min_players, schedule, stargate_layout,
                   user_game, valid_totals)
@@ -108,6 +108,47 @@ async def _open_lobby(ctx, q, g: Game) -> None:
     g.lobby_end = time.time() + LOBBY_SECONDS
     schedule(ctx, lobby_expired, LOBBY_SECONDS, "lobby", g.chat_id)
     await q.edit_message_text(lobby_text(g))
+    await _add_preregistered(ctx, g)
+
+
+async def _add_preregistered(ctx, g: Game) -> None:
+    """The lobby is open: sign up the players who used /nextgame, and tell each in private."""
+    added = []
+    for uid, name in db.nextgame_take(g.chat_id, NEXTGAME_HOURS * 3600):
+        if uid in g.players:
+            continue
+        if uid in user_game:                    # busy in another round: skip, but tell them
+            await dm(ctx, uid, g, "nextgame_busy", chat=db.chat_title(g.chat_id))
+            continue
+        g.players[uid] = name
+        user_game[uid] = g.chat_id
+        added.append(name)
+        await dm(ctx, uid, g, "nextgame_dm", chat=db.chat_title(g.chat_id), mode=mode_name(g))
+    if added:
+        await say(ctx, g, "nextgame_added", names=", ".join(added), n=len(g.players))
+
+
+async def nextgame(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """/nextgame: pre-register for the next round created in this group (again: cancel)."""
+    chat, user = update.effective_chat, update.effective_user
+    lang = db.get_lang(chat.id)
+    if chat.type == "private":
+        await update.message.reply_text(T(lang, "group_only"))
+        return
+    g = games.get(chat.id)
+    if g and g.phase == Phase.LOBBY:
+        await update.message.reply_text(T(lang, "nextgame_lobby_open"))
+        return
+    if not db.has_started(user.id):
+        await ask_activation(update, ctx, lang)
+        return
+    db.track_chat(chat.id, chat.title)
+    db.touch_user(user.id, user.first_name)
+    if db.nextgame_toggle(chat.id, user.id, user.first_name):
+        await update.message.reply_text(T(lang, "nextgame_on", name=user.first_name,
+                                          hours=NEXTGAME_HOURS))
+    else:
+        await update.message.reply_text(T(lang, "nextgame_off", name=user.first_name))
 
 
 async def _after_options(ctx, q, g: Game) -> None:

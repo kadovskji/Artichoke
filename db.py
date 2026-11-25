@@ -31,6 +31,9 @@ CREATE TABLE IF NOT EXISTS known_chats (          -- groups where the bot is (or
     chat_id INTEGER PRIMARY KEY,
     title TEXT,
     active INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS nextgame (              -- /nextgame pre-registrations
+    chat_id INTEGER, user_id INTEGER, name TEXT, ts INTEGER,
+    PRIMARY KEY (chat_id, user_id));
 CREATE TABLE IF NOT EXISTS rounds (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     chat_id INTEGER, ts INTEGER, mode TEXT,
@@ -146,6 +149,33 @@ def track_chat(chat_id: int, title: str | None) -> None:
         "ON CONFLICT(chat_id) DO UPDATE SET title = excluded.title, active = 1",
         (chat_id, title))
     _db.commit()
+
+
+def chat_title(chat_id: int) -> str:
+    rows = query("SELECT title FROM known_chats WHERE chat_id = ?", (chat_id,))
+    return (rows[0][0] if rows and rows[0][0] else "") or ""
+
+
+def nextgame_toggle(chat_id: int, user_id: int, name: str) -> bool:
+    """Pre-register for the next round of a group, or cancel it. True = now registered."""
+    if query("SELECT 1 FROM nextgame WHERE chat_id = ? AND user_id = ?", (chat_id, user_id)):
+        _db.execute("DELETE FROM nextgame WHERE chat_id = ? AND user_id = ?", (chat_id, user_id))
+        _db.commit()
+        return False
+    _db.execute("INSERT INTO nextgame (chat_id, user_id, name, ts) VALUES (?, ?, ?, ?)",
+                (chat_id, user_id, name, int(time.time())))
+    _db.commit()
+    return True
+
+
+def nextgame_take(chat_id: int, max_age: float) -> list[tuple[int, str]]:
+    """The pre-registered users of a group that are still valid; all registrations of the
+    group (expired ones too) are consumed."""
+    rows = query("SELECT user_id, name FROM nextgame WHERE chat_id = ? AND ts >= ? ORDER BY ts",
+                 (chat_id, int(time.time() - max_age)))
+    _db.execute("DELETE FROM nextgame WHERE chat_id = ?", (chat_id,))
+    _db.commit()
+    return rows
 
 
 def set_chat_active(chat_id: int, active: bool, title: str | None = None) -> None:

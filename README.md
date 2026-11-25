@@ -98,6 +98,7 @@ The variant is shown in the sign-up message and saved with the round. Nothing el
 - *Don't know* answers don't cost the asker a move; a wrong attempt costs a move. Attempts are matched ignoring case, spaces, accents and punctuation, and through Wikipedia redirects (so "Dante" matches "Dante Alighieri").
 - Identities are validated on Wikipedia and Wikidata: places, events, works, groups and real animals are refused, and so are disambiguation pages. Write the name as it appears on Wikipedia.
 - If the bot is a group admin with the *Delete messages* permission, it removes messages that reveal the identity.
+- **Signing up in advance**: `/nextgame` pre-registers you for the next round created in the group (valid for 24 hours, even while another round is running). When that round's sign-ups open you are added automatically, counted among the players, and the bot tells you in private. If you are in a round in another group meanwhile, you are skipped and told so. Sending `/nextgame` again cancels it.
 - **Joining late**: during a round (before the final vote or the last chance of Agent Skip) `/join` lets a new player in as a researcher. Moves: the average of the moves left to the current players (rounded, at least 1). In Stargate the newcomer joins the smallest team (kept secret). With 4 or fewer players at the start the Artichoke vote stays off, even if somebody joins later.
 - **Pause**: `/hold <minutes>` freezes every timer of the round (max 10 minutes per pause, once per player, 30 minutes in total per round). `/ready` from any player resumes it early. Group admins can disable it or restrict it to admins in `/settings`.
 
@@ -108,6 +109,7 @@ The variant is shown in the sign-up message and saved with the round. Nothing el
 | `/start` | Run it once in a private chat with the bot, so it can message you |
 | `/newgame` | Create a round: choose the mode (and the variant, teams and moves if the group allows it) |
 | `/join` | Join the round; also while it is in progress (see *Joining late*) |
+| `/nextgame` | Sign up in advance for the next round of the group (send it again to cancel) |
 | `/ready` | Start the round now (any joined player, if there are enough players); during a pause, resume the round |
 | `/wait <minutes>` | Extend the sign-up window (max 10 per use, decimals allowed, e.g. `/wait 3.5`) |
 | `/hold <minutes>` | Pause the round (see above) |
